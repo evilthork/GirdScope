@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Estadísticas locales, comparativas y campeonatos para iRacing y Assetto Corsa."
+    />
+    <meta name="theme-color" content="#0b0c0e" />
+    <title>GridScope — Racing Stats</title>
+    <link rel="icon" href="assets/gridscope-logo.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <section class="simulator-gateway" id="simulatorGateway">
+      <div class="gateway-atmosphere" aria-hidden="true"></div>
+      <header class="gateway-brand">
+        <img src="assets/gridscope-logo.svg" alt="" />
+        <span><strong>GRID</strong><small>SCOPE</small></span>
+      </header>
+
+      <div class="gateway-panel" id="simulatorChooser">
+        <div class="gateway-copy">
+          <p class="eyebrow">Tu archivo de competición</p>
+          <h1>Elige dónde corres.<br /><span>GridScope organiza el resto.</span></h1>
+          <p>Importa tus resultados locales, descubre rivales recurrentes y conserva un historial que no depende de servicios externos.</p>
+        </div>
+        <div class="simulator-choice-grid">
+          <button class="simulator-choice iracing-choice" type="button" data-select-simulator="iracing">
+            <span class="simulator-choice-number">01</span>
+            <span class="simulator-choice-mark">iR</span>
+            <span class="simulator-choice-copy">
+              <small>Servicio oficial</small>
+              <strong>iRacing</strong>
+              <em>Series oficiales, splits, SoF, iRating, Safety Rating y resultados completos.</em>
+            </span>
+            <span class="simulator-choice-action">Entrar <b>→</b></span>
+          </button>
+          <button class="simulator-choice assetto-choice" type="button" data-select-simulator="assetto-corsa">
+            <span class="simulator-choice-number">02</span>
+            <span class="simulator-choice-mark">AC</span>
+            <span class="simulator-choice-copy">
+              <small>Edición original · 2014</small>
+              <strong>Assetto Corsa</strong>
+              <em>Historial de Content Manager, vueltas, sectores, coches, circuitos y rivales.</em>
+            </span>
+            <span class="simulator-choice-action">Entrar <b>→</b></span>
+          </button>
+        </div>
+        <div class="gateway-privacy">
+          <span></span>
+          <p><strong>Privado por diseño.</strong> Los resultados se procesan y guardan únicamente en este ordenador.</p>
+        </div>
+      </div>
+
+      <div class="gateway-panel gateway-setup" id="simulatorSetup" hidden>
+        <button class="gateway-back" id="gatewayBackButton" type="button">← Volver a simuladores</button>
+        <div class="gateway-setup-layout">
+          <div class="gateway-setup-intro">
+            <p class="eyebrow" id="setupEyebrow">Primera configuración</p>
+            <h1 id="setupTitle">Configurar simulador</h1>
+            <p id="setupDescription"></p>
+            <div class="setup-steps" id="setupSteps"></div>
+          </div>
+          <form class="gateway-setup-form" id="simulatorSetupForm">
+            <input id="setupSimulator" type="hidden" />
+            <label>
+              <span id="setupOwnerLabel">Piloto de referencia</span>
+              <input id="setupOwnerIdentity" type="text" autocomplete="off" required />
+              <small id="setupOwnerHelp"></small>
+            </label>
+            <label id="setupAliasesField" hidden>
+              <span>Todos los nombres con los que corres</span>
+              <textarea id="setupOwnerAliases" rows="3" autocomplete="off" placeholder="Un nombre por línea"></textarea>
+              <small>GridScope los unirá como un solo piloto. Puedes añadir o quitar alias cuando quieras.</small>
+            </label>
+            <label>
+              <span id="setupFolderLabel">Carpeta de resultados</span>
+              <input id="setupFolder" type="text" autocomplete="off" required />
+              <small id="setupFolderHelp"></small>
+            </label>
+            <label id="setupInstallFolderField" hidden>
+              <span>Carpeta de instalación de Assetto Corsa</span>
+              <input id="setupInstallFolder" type="text" autocomplete="off" />
+              <small>Se utiliza para mostrar las imágenes y los trazados originales, incluidos los circuitos mod.</small>
+            </label>
+            <label class="gateway-toggle">
+              <input id="setupAutoScan" type="checkbox" checked />
+              <span><strong>Actualizar automáticamente</strong><small>GridScope comprobará la carpeta cada minuto mientras esté abierto.</small></span>
+            </label>
+            <div class="setup-detection" id="setupDetection"></div>
+            <button class="gateway-submit" id="setupSubmitButton" type="submit">Guardar y analizar resultados <span>→</span></button>
+            <p class="setup-footnote">La carpeta original nunca se modifica ni se elimina. GridScope solo lee los archivos compatibles.</p>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <div class="app-shell" id="appShell" hidden>
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#" aria-label="GridScope">
+          <span class="brand-mark" aria-hidden="true">
+            <img src="assets/gridscope-logo.svg" alt="" />
+          </span>
+          <span>
+            <strong>GRID</strong>
+            <small>SCOPE</small>
+          </span>
+        </a>
+
+        <div class="league-switcher">
+          <p class="eyebrow">Campeonato</p>
+          <button class="league-select" type="button" id="leagueMenuButton" aria-haspopup="true" aria-expanded="false">
+            <span class="league-dot">PC</span>
+            <span class="league-select-copy">
+              <strong id="sidebarSeriesName">Porsche Cup</strong>
+              <small id="sidebarSeasonName">2026 S3 · Actual</small>
+            </span>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="m6 8 4 4 4-4" />
+            </svg>
+          </button>
+          <div class="league-menu" id="leagueMenu" hidden>
+            <div class="league-menu-head">
+              <div><strong>Mis campeonatos</strong><small id="leagueMenuCount">0 temporadas</small></div>
+              <span class="league-menu-live"><i></i> LOCAL</span>
+            </div>
+            <div class="league-menu-list" id="leagueMenuList"></div>
+          </div>
+        </div>
+
+        <nav class="main-nav" aria-label="Navegación principal">
+          <button class="nav-item active" data-view="overview" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z" /></svg>
+            Resumen
+          </button>
+          <button class="nav-item" data-view="rounds" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg>
+            Sesiones
+          </button>
+          <button class="nav-item" data-view="drivers" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m7-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 10v-2a4 4 0 0 0-3-3.87m-2-12a4 4 0 0 1 0 7.75" /></svg>
+            Pilotos
+          </button>
+          <button class="nav-item" data-view="rivals" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v4a4 4 0 0 1-8 0V4Zm4 8v4m-4 4h8M5 6H3v2a4 4 0 0 0 5 4m11-6h2v2a4 4 0 0 1-5 4" /></svg>
+            Comparativas
+          </button>
+          <button class="nav-item" data-view="mini-leagues" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8m-4-5v5M7 3h10v5a5 5 0 0 1-10 0V3Zm0 2H3v2a5 5 0 0 0 5 5m9-7h4v2a5 5 0 0 1-5 5" /></svg>
+            Campeonatos
+          </button>
+          <button class="nav-item" data-view="history" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5m4-2v6l4 2" /></svg>
+            Archivo global
+          </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <button class="simulator-switch-button" id="simulatorSwitchButton" type="button">
+          <span class="simulator-switch-mark" id="simulatorSwitchMark">iR</span>
+          <span><small>Simulador activo</small><strong id="simulatorSwitchName">iRacing</strong></span>
+          <b>⇄</b>
+        </button>
+        <button class="nav-item" data-view="settings" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.4-3.5a7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.8-1L14.8 3h-4l-.4 2.9a8 8 0 0 0-1.8 1L6.2 6l-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.8 1l.4 2.9h4l.4-2.9a8 8 0 0 0 1.8-1l2.4 1 2-3.4-2-1.6a7.6 7.6 0 0 0 .1-1Z" /></svg>
+          Configuración
+        </button>
+        <div class="connection-status">
+          <span class="status-dot"></span>
+          <span>
+            <strong id="backendStatus">Base local activa</strong>
+            <small id="backendDetail">SQLite · Solo este ordenador</small>
+          </span>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <button class="icon-button menu-button" id="menuButton" type="button" aria-label="Abrir menú">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <div>
+            <p class="page-kicker">Viernes, 24 de julio</p>
+            <h1 id="pageTitle">Resumen de temporada</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="topbar-season-context" id="topbarSeasonContext" type="button">
+              <span id="topbarSeriesName">Porsche Cup</span>
+              <small id="topbarSeasonName">2026 S3</small>
+            </button>
+            <span class="demo-pill"><span></span> Datos de demostración</span>
+            <button class="secondary-button" type="button" id="refreshButton">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8m0-5v5h-5" /></svg>
+              Actualizar
+            </button>
+            <div class="profile-avatar" title="Administrador local">DL</div>
+          </div>
+        </header>
+
+        <section class="view active" id="overview">
+          <article class="hero">
+            <div class="hero-content">
+              <div class="hero-meta">
+                <span class="live-badge" id="seasonStatusBadge"><span></span> TEMPORADA ACTUAL</span>
+                <span>Road · Clase C</span>
+              </div>
+              <img class="hero-series-logo" id="heroSeriesLogo" src="" alt="">
+              <h2 id="heroSeries">iRacing Porsche Cup by CONSPIT</h2>
+              <p id="heroCar">Porsche 911 Cup (992.2) · Setup abierto</p>
+              <div class="hero-stats">
+                <div><small>Temporada</small><strong id="heroSeason">2026 S3</strong></div>
+                <div><small id="heroPeriodLabel">Jornada actual</small><strong id="heroWeek">06 <em>/ 12</em></strong></div>
+                <div><small>Pilotos</small><strong id="heroDrivers">08</strong></div>
+              </div>
+            </div>
+            <div class="hero-next">
+              <span id="heroTrackLabel">ÚLTIMO RESULTADO</span>
+              <strong id="heroTrack">Road America</strong>
+              <small id="heroTrackDetail">Semana 7</small>
+              <div class="track-line">
+                <img id="heroTrackMap" src="" alt="Trazado de circuito">
+              </div>
+            </div>
+          </article>
+
+          <section class="panel owner-season-panel" id="ownerSeasonPanel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow" id="ownerSeasonKicker">Piloto de referencia</p>
+                <h3 id="ownerSeasonTitle">Estadísticas personales de la temporada</h3>
+                <p class="panel-description" id="ownerSeasonDescription">Resultados registrados en la serie y temporada seleccionadas.</p>
+              </div>
+              <button class="text-button" data-view-target="rounds" type="button">Ver todas las sesiones <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button>
+            </div>
+            <div class="owner-season-stats" id="ownerSeasonStats">
+              <article><small>Carreras</small><strong>—</strong><span>Cargando datos</span></article>
+            </div>
+            <div class="owner-track-breakdown" id="ownerTrackBreakdown"></div>
+            <div class="table-wrap owner-season-races-wrap">
+              <table class="owner-season-races-table">
+                <thead>
+                  <tr>
+                    <th>Carrera</th><th class="numeric">Split</th><th class="numeric">SoF</th>
+                    <th class="numeric">Salida</th><th class="numeric">Meta</th><th class="numeric">± Pos.</th>
+                    <th class="numeric">Tus inc.</th><th class="numeric">iRating</th><th class="numeric">SR</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="ownerSeasonRaces"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="stat-grid" aria-label="Estadísticas destacadas">
+            <article class="stat-card">
+              <div class="stat-icon amber"><svg viewBox="0 0 24 24"><path d="M8 21h8m-4-4v4M7 4h10v4a5 5 0 0 1-10 0V4Zm0 2H4v2a4 4 0 0 0 4 4m9-6h3v2a4 4 0 0 1-4 4" /></svg></div>
+              <div><small id="leaderLabel">Líder actual</small><strong id="leaderName">Álex Romero</strong><span id="leaderDetail">3,42 pos. media</span></div>
+              <span class="trend neutral" id="leaderTrend">—</span>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon blue"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6" /></svg></div>
+              <div><small>Más victorias</small><strong id="winnerName">Marc Vidal</strong><span id="winnerDetail">1 victoria</span></div>
+              <span class="trend neutral" id="winnerTrend">—</span>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon green"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg></div>
+              <div><small>Piloto más limpio</small><strong id="cleanName">Diego Lara</strong><span id="cleanDetail">1,67x por semana</span></div>
+              <span class="trend neutral" id="cleanTrend">—</span>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon violet"><svg viewBox="0 0 24 24"><path d="M4 19V9m5 10V5m6 14v-7m5 7V3" /></svg></div>
+              <div><small>SoF medio</small><strong id="sofValue">2.384</strong><span id="sofDetail">18 carreras analizadas</span></div>
+              <span class="trend neutral" id="sofTrend">—</span>
+            </article>
+          </section>
+
+          <div class="content-grid">
+            <section class="panel standings-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Clasificación</p>
+                  <h3>General de pilotos</h3>
+                </div>
+                <div class="segmented-control" role="group" aria-label="Tipo de clasificación">
+                  <button class="active" data-ranking="weekly" type="button">Media semanal</button>
+                  <button data-ranking="races" type="button">Todas las carreras</button>
+                </div>
+              </div>
+              <div class="qualification-note" id="qualificationNote">
+                <svg viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-6v-4m0-4h.01" /></svg>
+                Se requieren 3 de 6 semanas completadas para entrar en la clasificación oficial.
+              </div>
+              <div class="table-wrap">
+                <table class="ranking-table">
+                  <thead>
+                    <tr>
+                      <th>Pos.</th>
+                      <th>Piloto</th>
+                      <th class="numeric ranking-label">Media semanal</th>
+                      <th class="numeric">Inc. / sem.</th>
+                      <th class="numeric">Semanas</th>
+                      <th class="numeric">Carreras</th>
+                      <th class="numeric">Victorias</th>
+                      <th class="numeric">SoF medio</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="rankingBody"></tbody>
+                </table>
+              </div>
+              <button class="text-button full-ranking-button" data-view-target="drivers" type="button">
+                Ver clasificación completa
+                <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
+              </button>
+            </section>
+
+            <aside class="right-column">
+              <section class="panel progress-panel">
+                <div class="panel-header compact">
+                  <div>
+                    <p class="eyebrow">Rendimiento personal</p>
+                    <h3>Progresión de resultados</h3>
+                  </div>
+                </div>
+                <div id="ownerProgressContent" class="owner-progress-content"><p class="session-empty">Cargando resultados…</p></div>
+              </section>
+
+              <section class="panel latest-panel">
+                <div class="panel-header compact">
+                  <div>
+                    <p class="eyebrow">Última carrera personal</p>
+                    <h3 id="ownerLatestTitle">Cargando resultado…</h3>
+                  </div>
+                  <span class="round-number" id="ownerLatestWeek">—</span>
+                </div>
+                <div id="ownerLatestContent"><p class="session-empty">Cargando datos…</p></div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="rounds">
+          <div class="section-heading">
+            <div><p class="eyebrow" id="roundsSeason">2026 Season 3</p><h2>Sesiones de temporada</h2><p>Cada semana, circuito y bloque de carreras importadas.</p></div>
+            <div class="section-actions">
+              <button class="secondary-button" type="button" id="importResultsButton" data-iracing-only><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v4h16v-4" /></svg>Importar JSON</button>
+              <button class="primary-button" type="button" id="syncRoundsButton"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8m0-5v5h-5" /></svg>Buscar resultados</button>
+            </div>
+          </div>
+          <div class="round-list" id="roundList"></div>
+          <div class="section-heading race-explorer-heading">
+            <div><p class="eyebrow">Archivo de sesiones</p><h2>Carreras importadas</h2><p>Abre una carrera para consultar la parrilla completa y todas sus estadísticas.</p></div>
+          </div>
+          <div class="race-explorer" id="raceExplorer">
+            <article class="empty-archive"><h3>Cargando carreras…</h3></article>
+          </div>
+        </section>
+
+        <section class="view" id="drivers">
+          <div class="section-heading">
+            <div><p class="eyebrow">Parrilla</p><h2>Pilotos</h2><p>Participación, rendimiento y limpieza de cada piloto.</p></div>
+            <button class="primary-button" type="button" id="addDriverButton" data-iracing-only><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Añadir piloto</button>
+          </div>
+          <div class="driver-grid" id="driverGrid"></div>
+        </section>
+
+        <section class="view" id="rivals">
+          <div class="section-heading">
+            <div><p class="eyebrow">Rendimiento frente a frente</p><h2>Comparativas</h2><p id="rivalIntro">Coincidencias y evolución contra los mismos pilotos.</p></div>
+          </div>
+          <section class="comparison-summary" id="comparisonSummary"></section>
+          <section class="panel race-progress-panel">
+            <div class="panel-header">
+              <div><p class="eyebrow">Evolución carrera a carrera</p><h3>Tu progreso</h3></div>
+            </div>
+            <div class="table-wrap">
+              <table class="race-progress-table">
+                <thead>
+                  <tr>
+                    <th>Carrera</th><th class="numeric">SoF</th><th class="numeric">Split</th>
+                    <th class="numeric">Salida</th><th class="numeric">Meta</th><th class="numeric">± Pos.</th>
+                    <th class="numeric">Incidentes</th><th class="numeric">iRating</th><th class="numeric">Safety Rating</th>
+                  </tr>
+                </thead>
+                <tbody id="raceProgressBody"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel rivals-panel">
+            <div class="panel-header">
+              <div><p class="eyebrow">Rivales frecuentes</p><h3>Historial compartido</h3></div>
+            </div>
+            <div class="table-wrap">
+              <table class="rivals-table">
+                <thead>
+                  <tr>
+                    <th>Rival</th>
+                    <th class="numeric">Coincidencias</th>
+                    <th class="numeric">Delante</th>
+                    <th class="numeric">Detrás</th>
+                    <th class="numeric">% por delante</th>
+                    <th class="numeric">Ventaja media</th>
+                    <th class="numeric">Inc. tú / rival</th>
+                    <th class="numeric">Progreso reciente</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="rivalsBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="mini-leagues">
+          <div class="section-heading">
+            <div><p class="eyebrow">Competiciones construidas con tu historial</p><h2>Campeonatos GridScope</h2><p>Utiliza los periodos automáticos o crea una clasificación con las series, fechas y pilotos que tú elijas.</p></div>
+            <button class="primary-button" type="button" id="createChampionshipButton">Crear campeonato</button>
+          </div>
+          <section class="custom-championships" id="customChampionshipsSection" hidden>
+            <div class="custom-championships-heading"><div><small>Mis campeonatos</small><strong>Configuraciones guardadas</strong></div><span>Se guardan únicamente en este ordenador.</span></div>
+            <div class="custom-championship-list" id="customChampionshipList"></div>
+          </section>
+          <div class="automatic-championship-label"><span>Campeonatos automáticos</span><small>Se actualizan al importar nuevas carreras</small></div>
+          <div class="mini-league-tabs" id="miniLeagueTabs"></div>
+          <div class="custom-championship-toolbar" id="customChampionshipToolbar" hidden>
+            <button class="secondary-button" type="button" id="editChampionshipButton">Editar configuración</button>
+          </div>
+          <div class="mini-period-toolbar" id="miniLeaguePeriodToolbar" hidden>
+            <label for="miniLeaguePeriodSelect"><span>Periodo histórico</span></label>
+            <select id="miniLeaguePeriodSelect" aria-label="Seleccionar periodo del campeonato"></select>
+          </div>
+          <section class="mini-league-summary" id="miniLeagueSummary"></section>
+          <div class="mini-period-comparison" id="miniLeaguePeriodComparison" hidden></div>
+          <div class="mini-league-explainer">
+            <strong>Cómo se calcula</strong>
+            <span id="miniLeagueCalculationHelp">En cada carrera solo se comparan los miembros presentes. El ganador interno obtiene 100 puntos y el último 0; el resto recibe una puntuación proporcional.</span>
+          </div>
+          <section class="panel mini-league-ranking-panel">
+            <div class="panel-header">
+              <div><p class="eyebrow" id="miniLeaguePeriod">Periodo</p><h3 id="miniLeagueRankingTitle">Clasificación de recurrentes</h3></div>
+              <div class="mini-league-ranking-rule">
+                <label for="miniLeagueMinimumRaces"><span>Carreras mínimas para clasificarse</span><input id="miniLeagueMinimumRaces" type="number" min="1" max="999" value="2" /></label>
+                <small id="miniLeagueMinimumHelp">Todos aparecen; quien no alcance el mínimo queda provisional.</small>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="mini-league-table">
+                <thead>
+                  <tr>
+                    <th><button class="table-sort-button" type="button" data-mini-sort="position">Pos.<span class="sort-indicator">↑</span></button></th>
+                    <th><button class="table-sort-button" type="button" data-mini-sort="name">Piloto<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" type="button" data-mini-sort="score">Índice<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" type="button" data-mini-sort="races">Carreras<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" type="button" data-mini-sort="duels">Duelos G/P<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" type="button" data-mini-sort="duelWinRate">% ganado<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" type="button" data-mini-sort="seriesCount">Series<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" id="miniIncidentsSort" type="button" data-mini-sort="averageIncidents">Inc./carrera<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" id="miniRatingSort" type="button" data-mini-sort="iratingEnd">iRating<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" id="miniSafetySort" type="button" data-mini-sort="safetyRatingEnd">SR<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric" id="miniGridScoreColumn"><button class="table-sort-button" type="button" data-mini-sort="gridScore">GridScore<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric" id="miniCleanlinessColumn"><button class="table-sort-button" type="button" data-mini-sort="cleanlinessScore">Limpieza<span class="sort-indicator">↕</span></button></th>
+                    <th class="numeric"><button class="table-sort-button" type="button" data-mini-sort="headToHead">Frente a ti<span class="sort-indicator">↕</span></button></th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="miniLeagueBody"></tbody>
+              </table>
+            </div>
+          </section>
+          <div class="section-heading mini-league-events-heading">
+            <div><p class="eyebrow">Calendario combinado</p><h2>Carreras puntuables</h2><p>Resultados de cualquier serie donde coincidieron al menos dos miembros.</p></div>
+          </div>
+          <div class="mini-league-events" id="miniLeagueEvents"></div>
+        </section>
+
+        <section class="view" id="history">
+          <div class="section-heading">
+            <div><p class="eyebrow">Todo el archivo local</p><h2>Resumen global</h2><p>Estadísticas combinadas de todas las series y temporadas importadas.</p></div>
+            <button class="primary-button" type="button" id="archiveButton"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8m-1-5h20v5H2V3Zm8 9h4" /></svg>Guardar temporada actual</button>
+          </div>
+          <section class="global-overview history-global">
+            <div class="global-stat-grid" id="globalStatGrid"></div>
+            <div class="season-overview-grid" id="seasonOverviewGrid"></div>
+          </section>
+          <div class="section-heading archive-selection-heading">
+            <div><p class="eyebrow">Temporada seleccionada</p><h2>Conservación y exportación</h2><p>Guarda sus resultados para no depender de futuras consultas a iRacing.</p></div>
+          </div>
+          <div class="history-layout">
+            <article class="panel archive-card current">
+              <span class="archive-status" id="archiveStatus">EN CURSO</span>
+              <div class="archive-cover"><span id="archiveYear">2026</span><strong id="archiveSeason">S3</strong></div>
+              <div class="archive-info">
+                <p class="eyebrow" id="archiveSeries">Porsche Cup by CONSPIT</p>
+                <h3>Temporada actual</h3>
+                <p id="archiveSummary">6 de 12 jornadas · 18 carreras · 8 pilotos</p>
+                <div class="archive-actions"><button type="button" data-view-target="overview">Abrir</button><button type="button" id="exportButton">Exportar</button></div>
+              </div>
+            </article>
+            <article class="empty-archive">
+              <div><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8m-1-5h20v5H2V3Zm8 9h4" /></svg></div>
+              <h3>Tu histórico empieza aquí</h3>
+              <p>Al archivar una temporada conservaremos sus carreras, cálculos y clasificación final en este ordenador.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="settings">
+          <div class="section-heading">
+            <div><p class="eyebrow">Preferencias</p><h2 id="settingsTitle">Configuración</h2><p id="settingsDescription">Reglas, fuentes de resultados y almacenamiento local.</p></div>
+            <button class="primary-button" type="button" id="saveSettingsButton">Guardar cambios</button>
+          </div>
+          <div class="settings-grid">
+            <section class="panel settings-card">
+              <div class="settings-icon"><svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.4-3.5a7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.8-1L14.8 3h-4l-.4 2.9a8 8 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.8 1l.4 2.9h4l.4-2.9a8 8 0 0 0 1.8-1l2.4 1 2-3.4-2-1.6a7.6 7.6 0 0 0 .1-1Z" /></svg></div>
+              <h3>Reglas de clasificación</h3>
+              <label>Clasificación principal<select id="rankingModeSetting"><option value="weekly">Media semanal</option><option value="races">Media de todas las carreras</option></select></label>
+              <label>Participación mínima<div class="input-suffix"><input id="minimumParticipationSetting" type="number" min="1" max="100" value="50" /><span>%</span></div></label>
+              <label>Primer desempate<select id="tiebreakerSetting"><option value="incidents">Menor media de incidentes</option><option value="participation">Más semanas participadas</option><option value="wins">Más victorias</option></select></label>
+              <label><span id="ownerIdentityLabel">Mi ID de iRacing</span><input id="ownerIracingIdSetting" type="text" value="" /><small id="ownerIdentityHelp">Se utiliza para las comparativas y para destacar tus resultados.</small></label>
+              <label id="ownerAliasesSettingField" hidden><span>Mis alias de Assetto Corsa</span><textarea id="ownerAliasesSetting" rows="4" autocomplete="off" placeholder="Un nombre por línea"></textarea><small>Todos estos nombres se consideran el mismo piloto en estadísticas y comparativas.</small></label>
+            </section>
+            <section class="panel settings-card" data-simulator-only="iracing">
+              <div class="settings-icon disconnected" id="oauthIcon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7m2.3 5.9a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" /></svg></div>
+              <h3>Conexión con iRacing</h3>
+              <div class="connection-box">
+                <span class="status-dot warning" id="oauthStatusDot"></span>
+                <div><strong id="oauthStatusTitle">No conectado</strong><small id="oauthStatusDetail">Configura un cliente público de iRacing.</small></div>
+              </div>
+              <label>Client ID público<input id="oauthClientId" type="text" autocomplete="off" placeholder="Client ID emitido por iRacing" /></label>
+              <p class="oauth-redirect">Redirect registrado: <code>http://127.0.0.1:0/oauth/callback</code></p>
+              <div class="oauth-actions">
+                <button class="primary-button" id="connectButton" type="button">Guardar y conectar</button>
+                <button class="secondary-button" id="disconnectButton" type="button" hidden>Desconectar</button>
+              </div>
+              <p class="oauth-notice">iRacing mantiene pausada la creación de nuevos Client ID de OAuth. Por eso esta versión utiliza resultados JSON; cuando vuelva a habilitarlos, GridScope añadirá la integración directa en una versión posterior. <a href="https://support.iracing.com/support/solutions/articles/31000177790-oauth-client-credentials" target="_blank" rel="noreferrer">Consultar estado oficial</a>.</p>
+              <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Zm-3-10 2 2 4-4" /></svg>Tu contraseña nunca se guardará en esta aplicación.</p>
+            </section>
+            <section class="panel settings-card" data-simulator-only="iracing">
+              <div class="settings-icon"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3V6Zm9 5v6m0-6 3 3m-3-3-3 3" /></svg></div>
+              <h3>Carpeta de resultados</h3>
+              <label>Ruta de los JSON<input id="importFolderSetting" type="text" autocomplete="off" placeholder="C:\Users\usuario\Downloads" /></label>
+              <label class="toggle-setting"><input id="autoScanImportSetting" type="checkbox" /><span><strong>Buscar automáticamente</strong><small>Comprueba la carpeta cada minuto mientras la web está abierta.</small></span></label>
+              <div class="oauth-actions">
+                <button class="primary-button" type="button" id="saveImportFolderButton">Guardar carpeta</button>
+                <button class="secondary-button" type="button" id="scanImportFolderButton">Buscar ahora</button>
+              </div>
+              <p class="oauth-notice" id="folderScanStatus">Solo se revisan archivos `.json` de esta carpeta, sin entrar en subcarpetas.</p>
+            </section>
+            <section class="panel settings-card telemetry-settings-card" data-simulator-only="iracing">
+              <div class="settings-icon telemetry-icon"><svg viewBox="0 0 24 24"><path d="M3 15h3l2-8 4 13 3-10 2 5h4M4 4v16h16" /></svg></div>
+              <h3>Carpeta de telemetrías</h3>
+              <label>Ruta de los archivos IBT<input id="telemetryFolderSetting" type="text" autocomplete="off" placeholder="C:\Users\usuario\Documents\iRacing\telemetry" /></label>
+              <label class="toggle-setting"><input id="autoScanTelemetrySetting" type="checkbox" /><span><strong>Buscar automáticamente</strong><small>Indexa archivos `.ibt` nuevos cada minuto.</small></span></label>
+              <div class="oauth-actions">
+                <button class="primary-button" type="button" id="saveTelemetryFolderButton">Guardar carpeta</button>
+                <button class="secondary-button" type="button" id="scanTelemetryFolderButton">Buscar ahora</button>
+              </div>
+              <div class="telemetry-mini-stats">
+                <span><small>Archivos</small><strong id="telemetryFileCount">0</strong></span>
+                <span><small>Con carrera</small><strong id="linkedTelemetryCount">0</strong></span>
+                <span><small>Prácticas</small><strong id="practiceTelemetryCount">0</strong></span>
+              </div>
+              <p class="oauth-notice" id="telemetryScanStatus">Las prácticas se guardan como telemetría, pero nunca cuentan como carreras.</p>
+              <div class="telemetry-file-list" id="telemetryFileList"></div>
+            </section>
+            <section class="panel settings-card assetto-settings-card" data-simulator-only="assetto-corsa">
+              <div class="settings-icon assetto-icon"><strong>AC</strong></div>
+              <h3>Historial de Content Manager</h3>
+              <p class="settings-card-intro">Selecciona la carpeta donde Content Manager guarda los JSON de cada sesión. No es la carpeta de instalación del juego.</p>
+              <label>Carpeta del historial de sesiones<input id="assettoFolderSetting" type="text" autocomplete="off" placeholder="C:\Users\usuario\AppData\Local\AcTools Content Manager\Progress\Sessions" /><small>Ruta habitual: <code>%LOCALAPPDATA%\AcTools Content Manager\Progress\Sessions</code></small></label>
+              <details class="folder-help">
+                <summary>¿No se ha detectado? Cómo encontrar la carpeta</summary>
+                <div class="folder-help-content">
+                  <ol>
+                    <li>Pulsa <kbd>Windows</kbd> + <kbd>R</kbd>.</li>
+                    <li>Pega <code>%LOCALAPPDATA%\AcTools Content Manager\Progress\Sessions</code> y pulsa <kbd>Intro</kbd>.</li>
+                    <li>Cuando se abra la carpeta, copia la ruta completa de la barra superior y pégala en el campo anterior.</li>
+                  </ol>
+                  <p>La carpeta correcta contiene archivos <code>.json</code> con nombres parecidos a <code>260725-120000.json</code>. Si <strong>Sessions</strong> todavía no existe, abre Assetto Corsa desde Content Manager y termina al menos una sesión.</p>
+                </div>
+              </details>
+              <label>Instalación de Assetto Corsa<input id="assettoInstallFolderSetting" type="text" autocomplete="off" placeholder="C:\Program Files (x86)\Steam\steamapps\common\assettocorsa" /><small>Permite utilizar las imágenes y mapas originales de cada circuito.</small></label>
+              <label class="toggle-setting"><input id="autoScanAssettoSetting" type="checkbox" /><span><strong>Buscar automáticamente</strong><small>Detecta nuevas carreras cada minuto sin modificar los archivos originales.</small></span></label>
+              <div class="oauth-actions">
+                <button class="primary-button" type="button" id="saveAssettoFolderButton">Guardar carpeta</button>
+                <button class="secondary-button" type="button" id="scanAssettoFolderButton">Buscar ahora</button>
+              </div>
+              <p class="oauth-notice" id="assettoScanStatus">Las prácticas y clasificaciones se reconocen, pero solo las carreras puntúan. En carreras locales se conserva tu resultado y se excluyen los rivales de IA.</p>
+            </section>
+            <section class="panel settings-card assetto-guide-card" data-simulator-only="assetto-corsa">
+              <div class="settings-icon guide-icon"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm3 0v16m3-12h5m-5 4h5" /></svg></div>
+              <h3>Cómo funciona</h3>
+              <ol class="assetto-guide-list">
+                <li><span>1</span><p><strong>Conduce con Content Manager</strong><small>Al terminar una sesión genera automáticamente un JSON local.</small></p></li>
+                <li><span>2</span><p><strong>GridScope identifica las carreras</strong><small>Prácticas, clasificación y carreras quedan separadas correctamente.</small></p></li>
+                <li><span>3</span><p><strong>Distingue pilotos e IA</strong><small>En local solo conserva tu resultado; en servidores online y LFM mantiene a todos los pilotos.</small></p></li>
+                <li><span>4</span><p><strong>Se construye tu historial</strong><small>Comparativas, rivales y campeonatos se actualizan sin subir datos a internet.</small></p></li>
+              </ol>
+              <p class="oauth-notice">En Content Manager aumenta <strong>Keep results of the last … sessions</strong> para conservar un histórico más largo.</p>
+            </section>
+            <section class="panel settings-card">
+              <div class="settings-icon"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8m-1-5h20v5H2V3Zm8 9h4" /></svg></div>
+              <h3>Datos locales</h3>
+              <div class="data-row"><span>Temporadas guardadas</span><strong id="archiveCount">0</strong></div>
+              <div class="data-row"><span>Carreras almacenadas</span><strong id="storedRaceCount">18</strong></div>
+              <div class="data-row"><span>Archivos importados</span><strong id="importedFileCount">0</strong></div>
+              <div class="data-row"><span>Telemetrías indexadas</span><strong id="storedTelemetryCount">0</strong></div>
+              <div class="data-row"><span>Última copia</span><strong id="lastBackup">Sin copias</strong></div>
+              <button class="secondary-button wide" type="button" id="backupButton">Crear copia de seguridad</button>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <span class="toast-icon"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg></span>
+      <div><strong id="toastTitle">Actualizado</strong><small id="toastMessage">Los datos de demostración están al día.</small></div>
+    </div>
+    <div class="activity-indicator" id="activityIndicator" role="status" aria-live="polite" aria-atomic="true" hidden>
+      <span class="activity-spinner" aria-hidden="true"></span>
+      <div><strong id="activityTitle">Preparando GridScope…</strong><small id="activityMessage">Leyendo los datos locales.</small></div>
+      <span class="activity-progress" aria-hidden="true"></span>
+    </div>
+
+    <dialog id="driverDialog">
+      <form method="dialog" class="dialog-card" id="driverForm">
+        <div class="dialog-header">
+          <div><p class="eyebrow">Nueva incorporación</p><h2>Añadir piloto</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
+        </div>
+        <label>ID de iRacing<input id="driverIdInput" inputmode="numeric" placeholder="Ej. 123456" required /></label>
+        <p class="dialog-help">El ID se guardará ahora en SQLite. Cuando conectemos iRacing obtendremos automáticamente el nombre del piloto.</p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog>Cancelar</button>
+          <button class="primary-button" value="default" id="confirmDriverButton">Añadir piloto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="importDialog" class="wide-dialog">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div><p class="eyebrow">Resultados oficiales</p><h2>Importar desde iRacing</h2></div>
+          <button class="icon-button" type="button" data-close-import aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
+        </div>
+        <input id="resultFileInput" type="file" accept=".json,application/json" multiple hidden />
+        <button class="import-dropzone" id="importDropzone" type="button">
+          <span><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0 4 4m-4-4L8 8M4 15v5h16v-5" /></svg></span>
+          <strong>Arrastra aquí los resultados JSON</strong>
+          <small>o pulsa para seleccionar uno o varios archivos exportados desde iRacing</small>
+        </button>
+        <div class="import-file-list" id="importFileList"></div>
+        <div class="import-options">
+          <label><input id="includeAllDrivers" type="checkbox" checked /><span><strong>Añadir los pilotos encontrados</strong><small>Los incorpora automáticamente a esta liga.</small></span></label>
+          <label><input id="replaceDemoData" type="checkbox" checked /><span><strong>Reemplazar los datos de demostración</strong><small>Solo elimina los pilotos ficticios al realizar la primera importación.</small></span></label>
+        </div>
+        <p class="dialog-help">El archivo original se conservará íntegro dentro de SQLite. Las carreras repetidas se detectan mediante su Subsession ID y contenido.</p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-import>Cancelar</button>
+          <button class="primary-button" type="button" id="confirmImportButton" disabled>Importar resultados</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="raceDetailDialog" class="race-detail-dialog">
+      <div class="dialog-card race-detail-card">
+        <div class="dialog-header">
+          <div><p class="eyebrow" id="raceDetailKicker">Detalle de carrera</p><h2 id="raceDetailTitle">Cargando…</h2></div>
+          <div class="dialog-layer-actions">
+            <button class="dialog-layer-button dialog-layer-back" type="button" id="closeRaceDetail" aria-label="Cerrar esta ventana y volver a la anterior"><svg viewBox="0 0 20 20"><path d="m12.5 4-6 6 6 6" /></svg><span>Cerrar esta</span></button>
+            <button class="dialog-layer-button dialog-layer-close-all" type="button" data-close-all-details aria-label="Cerrar todas las ventanas de información"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15" /></svg><span>Cerrar todas</span></button>
+          </div>
+        </div>
+        <div id="raceDetailContent"></div>
+      </div>
+    </dialog>
+
+    <dialog id="sessionDetailDialog" class="session-detail-dialog">
+      <div class="dialog-card session-detail-card">
+        <div class="dialog-header">
+          <div><p class="eyebrow" id="sessionDetailKicker">Detalle semanal</p><h2 id="sessionDetailTitle">Cargando…</h2></div>
+          <div class="dialog-layer-actions">
+            <button class="dialog-layer-button dialog-layer-back" type="button" id="closeSessionDetail" aria-label="Cerrar esta ventana y volver a la anterior"><svg viewBox="0 0 20 20"><path d="m12.5 4-6 6 6 6" /></svg><span>Cerrar esta</span></button>
+            <button class="dialog-layer-button dialog-layer-close-all" type="button" data-close-all-details aria-label="Cerrar todas las ventanas de información"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15" /></svg><span>Cerrar todas</span></button>
+          </div>
+        </div>
+        <div id="sessionDetailContent"></div>
+      </div>
+    </dialog>
+
+    <dialog id="sessionDriverDialog" class="session-driver-dialog">
+      <div class="dialog-card session-driver-detail-card">
+        <div class="dialog-header">
+          <div><p class="eyebrow" id="sessionDriverKicker">Piloto de la sesión</p><h2 id="sessionDriverTitle">Detalle del piloto</h2></div>
+          <div class="dialog-layer-actions">
+            <button class="dialog-layer-button dialog-layer-back" type="button" id="closeSessionDriver" aria-label="Cerrar esta ventana y volver a la anterior"><svg viewBox="0 0 20 20"><path d="m12.5 4-6 6 6 6" /></svg><span>Cerrar esta</span></button>
+            <button class="dialog-layer-button dialog-layer-close-all" type="button" data-close-all-details aria-label="Cerrar todas las ventanas de información"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15" /></svg><span>Cerrar todas</span></button>
+          </div>
+        </div>
+        <div id="sessionDriverContent"></div>
+      </div>
+    </dialog>
+
+    <dialog id="rivalDetailDialog" class="rival-detail-dialog">
+      <div class="dialog-card rival-detail-card">
+        <div class="dialog-header">
+          <div><p class="eyebrow">Historial frente a frente</p><h2 id="rivalDetailTitle">Coincidencias</h2></div>
+          <div class="dialog-layer-actions">
+            <button class="dialog-layer-button dialog-layer-back" type="button" id="closeRivalDetail" aria-label="Cerrar esta ventana y volver a la anterior"><svg viewBox="0 0 20 20"><path d="m12.5 4-6 6 6 6" /></svg><span>Cerrar esta</span></button>
+            <button class="dialog-layer-button dialog-layer-close-all" type="button" data-close-all-details aria-label="Cerrar todas las ventanas de información"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15" /></svg><span>Cerrar todas</span></button>
+          </div>
+        </div>
+        <div id="rivalDetailContent"></div>
+      </div>
+    </dialog>
+
+    <dialog id="championshipDialog" class="championship-dialog">
+      <form class="dialog-card championship-dialog-card" id="championshipForm">
+        <div class="dialog-header">
+          <div><p class="eyebrow">Campeonato personalizado</p><h2 id="championshipDialogTitle">Crear campeonato</h2></div>
+          <button class="dialog-close" type="button" id="closeChampionshipDialog" aria-label="Cerrar">×</button>
+        </div>
+        <input id="championshipId" type="hidden" />
+        <div class="championship-form-grid">
+          <label class="championship-field championship-name-field"><span>Nombre del campeonato</span><input id="championshipName" type="text" maxlength="80" required placeholder="Ej. Copa LFM 2024" /></label>
+          <label class="championship-field"><span>Desde</span><input id="championshipStartDate" type="date" /></label>
+          <label class="championship-field"><span>Hasta</span><input id="championshipEndDate" type="date" /></label>
+          <label class="championship-field"><span>Sistema de clasificación</span>
+            <select id="championshipRankingMode">
+              <option value="all-races">Todas las carreras pesan igual</option>
+              <option value="weekly">Media semanal: todas las semanas pesan igual</option>
+            </select>
+          </label>
+          <label class="championship-field"><span>Carreras mínimas</span><input id="championshipMinimumRaces" type="number" min="1" max="999" value="2" /></label>
+          <label class="championship-field"><span>Selección de pilotos</span>
+            <select id="championshipParticipantMode">
+              <option value="recurrent">Rivales recurrentes automáticamente</option>
+              <option value="all">Todos los pilotos coincidentes</option>
+              <option value="selected">Solo los pilotos que seleccione</option>
+            </select>
+          </label>
+        </div>
+        <label class="championship-owner-toggle"><input id="championshipIncludeOwner" type="checkbox" checked /><span><strong>Incluir siempre a mi piloto</strong><small>Tu piloto de referencia formará parte del campeonato aunque no lo selecciones abajo.</small></span></label>
+        <section class="championship-choice-section">
+          <div class="championship-choice-heading">
+            <div><strong>Series incluidas</strong><small>Sin marcar ninguna se utilizarán todas las series del simulador actual.</small></div>
+            <div class="championship-choice-actions">
+              <span id="championshipSeriesCount">Todas por defecto</span>
+              <button type="button" id="selectAllChampionshipSeries">Seleccionar todas</button>
+              <button type="button" id="clearChampionshipSeries">Quitar selección</button>
+            </div>
+          </div>
+          <div class="championship-choice-list series-choice-list" id="championshipSeriesList"></div>
+        </section>
+        <section class="championship-choice-section" id="championshipDriversSection" hidden>
+          <div><strong>Pilotos del campeonato</strong><small>Selecciona manualmente quién participa. Puedes buscar por nombre.</small></div>
+          <input class="championship-driver-search" id="championshipDriverSearch" type="search" placeholder="Buscar piloto…" autocomplete="off" />
+          <div class="championship-choice-list driver-choice-list" id="championshipDriverList"></div>
+        </section>
+        <p class="championship-form-help">Solo puntúan carreras donde coinciden al menos dos miembros seleccionados. Los resultados originales no se modifican.</p>
+        <div class="dialog-actions championship-dialog-actions">
+          <button class="danger-button" type="button" id="deleteChampionshipButton" hidden>Eliminar</button>
+          <span></span>
+          <button class="secondary-button" type="button" id="cancelChampionshipButton">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar campeonato</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>

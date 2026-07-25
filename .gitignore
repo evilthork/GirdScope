@@ -1,0 +1,37 @@
+# Datos privados y bases locales
+*.db
+*.db-shm
+*.db-wal
+data/
+backups/
+logs/
+
+# Credenciales y configuración privada
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Paquetes y compilación
+build/
+dist/
+release/
+*.spec
+SPEC.md
+*.zip
+*.exe
+
+# Herramientas locales
+.agents/
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
