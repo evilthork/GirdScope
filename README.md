@@ -7,6 +7,16 @@ ningún servidor.
 
 > Versión actual: **0.7.3 Beta**
 
+## Descargar GridScope
+
+[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.3-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.3/GridScope-0.7.3-Windows.zip)
+
+**[Descargar GridScope 0.7.3 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.3/GridScope-0.7.3-Windows.zip)**
+
+No requiere instalación: descomprime el ZIP y ejecuta `GridScope.exe`.
+
+[Ver todas las versiones y notas de publicación](https://github.com/evilthork/GirdScope/releases)
+
 ## Funciones principales
 
 - Importación de resultados JSON de iRacing. La integración directa con su API
@@ -47,7 +57,7 @@ continúan utilizando esa base para no perder su historial.
 
 ### Versión preparada
 
-1. Descarga `GridScope-0.7.3-Windows.zip` desde GitHub Releases.
+1. [Descarga `GridScope-0.7.3-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.3/GridScope-0.7.3-Windows.zip).
 2. Descomprime el archivo.
 3. Ejecuta `GridScope.exe`.
 4. Mantén abierta la ventana del servidor mientras utilizas la aplicación.
