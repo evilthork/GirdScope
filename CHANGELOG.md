@@ -2,6 +2,12 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.7.3] - 2026-07-25
+
+- Se aceptan las URL públicas de RaceRoom con formato `/users/usuario/career`
+  además de la variante interna `/r3e/users/usuario/career`.
+- La configuración explica dónde cambiar posteriormente el perfil vinculado.
+
 ## [0.7.2] - 2026-07-25
 
 - RaceRoom se incorpora como tercer simulador independiente.

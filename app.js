@@ -208,7 +208,7 @@ const simulatorCopy = {
     title: "Conecta tu historial ranked público.",
     description: "GridScope consulta tu apartado Career sin pedir credenciales y guarda cada carrera localmente. La sincronización se divide en lotes para poder reanudarla.",
     ownerLabel: "URL del perfil de RaceRoom o usuario",
-    ownerHelp: "Ejemplo: https://game.raceroom.com/r3e/users/TuUsuario/career. Tu contraseña no es necesaria.",
+    ownerHelp: "Acepta https://game.raceroom.com/users/TuUsuario/career, la variante /r3e/users/ o solamente TuUsuario. Tu contraseña no es necesaria.",
     folderLabel: "Carpeta local de resultados de RaceRoom",
     folderHelp: "Ruta habitual: Documentos\\My Games\\SimBin\\RaceRoom Racing Experience\\UserData\\Log\\Results.",
     steps: [

@@ -5,7 +5,7 @@ GridScope es una aplicación local de estadísticas para **iRacing**,
 comparativas y Campeonatos GridScope sin subir el historial del usuario a
 ningún servidor.
 
-> Versión actual: **0.7.2 Beta**
+> Versión actual: **0.7.3 Beta**
 
 ## Funciones principales
 
@@ -47,7 +47,7 @@ continúan utilizando esa base para no perder su historial.
 
 ### Versión preparada
 
-1. Descarga `GridScope-0.7.2-Windows.zip` desde GitHub Releases.
+1. Descarga `GridScope-0.7.3-Windows.zip` desde GitHub Releases.
 2. Descomprime el archivo.
 3. Ejecuta `GridScope.exe`.
 4. Mantén abierta la ventana del servidor mientras utilizas la aplicación.

@@ -1,7 +1,7 @@
 $projectDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $applicationUrl = "http://127.0.0.1:4173/"
 $healthUrl = "${applicationUrl}api/health"
-$expectedServerVersion = "0.7.2"
+$expectedServerVersion = "0.7.3"
 $serverReady = $false
 $healthIsApexServer = $false
 

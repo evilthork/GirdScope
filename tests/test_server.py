@@ -21,6 +21,7 @@ from server import (
     normalize_assetto_corsa_export,
     normalize_iracing_export,
     normalize_raceroom_result,
+    raceroom_profile_slug,
     official_track_slug,
     read_ibt_metadata,
     resolve_assetto_track_asset,
@@ -1082,6 +1083,23 @@ class DataStoreTests(unittest.TestCase):
             ).fetchall()
         self.assertEqual([row["scoring_eligible"] for row in rows], [1, 0])
         self.assertEqual(rows[1]["distance_percent"], 40)
+
+    def test_raceroom_profile_accepts_public_and_internal_urls(self):
+        self.assertEqual(
+            raceroom_profile_slug(
+                "https://game.raceroom.com/users/example-driver/career"
+            ),
+            "example-driver",
+        )
+        self.assertEqual(
+            raceroom_profile_slug(
+                "https://game.raceroom.com/r3e/users/example-driver/career"
+            ),
+            "example-driver",
+        )
+        self.assertEqual(
+            raceroom_profile_slug("example-driver"), "example-driver"
+        )
 
 
 if __name__ == "__main__":

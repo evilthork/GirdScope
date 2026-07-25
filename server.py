@@ -38,7 +38,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.7.2"
+APP_VERSION = "0.7.3"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -1196,7 +1196,13 @@ def raceroom_profile_slug(value: str) -> str:
     parsed = urlparse(candidate if "://" in candidate else f"https://{candidate}")
     if parsed.netloc.lower().endswith("raceroom.com"):
         parts = [part for part in parsed.path.split("/") if part]
-        if len(parts) >= 3 and parts[0].lower() == "r3e" and parts[1].lower() == "users":
+        if len(parts) >= 2 and parts[0].lower() == "users":
+            candidate = parts[1]
+        elif (
+            len(parts) >= 3
+            and parts[0].lower() == "r3e"
+            and parts[1].lower() == "users"
+        ):
             candidate = parts[2]
     return unquote(candidate).strip().strip("/")
 
