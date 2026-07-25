@@ -200,6 +200,22 @@ const simulatorCopy = {
       ["Solo puntúan carreras", "Prácticas y clasificaciones se reconocen, pero no alteran los campeonatos."],
       ["Analiza cada vuelta", "Se importan posiciones, coches, circuitos, mejores vueltas, sectores e incidentes."]
     ]
+  },
+  raceroom: {
+    name: "RaceRoom",
+    mark: "RR",
+    eyebrow: "Primera configuración · RaceRoom",
+    title: "Conecta tu historial ranked público.",
+    description: "GridScope consulta tu apartado Career sin pedir credenciales y guarda cada carrera localmente. La sincronización se divide en lotes para poder reanudarla.",
+    ownerLabel: "URL del perfil de RaceRoom o usuario",
+    ownerHelp: "Ejemplo: https://game.raceroom.com/r3e/users/TuUsuario/career. Tu contraseña no es necesaria.",
+    folderLabel: "Carpeta local de resultados de RaceRoom",
+    folderHelp: "Ruta habitual: Documentos\\My Games\\SimBin\\RaceRoom Racing Experience\\UserData\\Log\\Results.",
+    steps: [
+      ["Perfil público", "RaceRoom publica tu historial ranked en el apartado Career."],
+      ["Importación progresiva", "Se guardan hasta 25 carreras por lote y nunca se repiten las ya almacenadas."],
+      ["Criterio transparente", "Todos los pilotos cuentan como coincidencia; solo puntúan si completan la distancia mínima."]
+    ]
   }
 };
 
@@ -262,7 +278,15 @@ function openSimulatorSetup(simulator) {
   document.querySelector("#setupInstallFolderField").hidden = simulator !== "assetto-corsa";
   document.querySelector("#setupInstallFolder").value =
     simulator === "assetto-corsa" ? (saved.installFolder || saved.suggestedInstallFolder || "") : "";
+  document.querySelector("#setupMinimumDistanceField").hidden = simulator !== "raceroom";
+  document.querySelector("#setupMinimumDistance").value = saved.minimumDistance || 50;
   document.querySelector("#setupAutoScan").checked = saved.autoScan !== false;
+  document.querySelector(".gateway-toggle strong").textContent =
+    simulator === "raceroom" ? "Sincronizar automáticamente" : "Actualizar automáticamente";
+  document.querySelector(".gateway-toggle small").textContent =
+    simulator === "raceroom"
+      ? "GridScope comprobará periódicamente el perfil público y solo descargará carreras nuevas."
+      : "GridScope comprobará la carpeta cada minuto mientras esté abierto.";
   document.querySelector("#setupSteps").innerHTML = copy.steps.map((step, index) => `
     <article><span>${index + 1}</span><div><strong>${escapeHtml(step[0])}</strong><small>${escapeHtml(step[1])}</small></div></article>
   `).join("");
@@ -277,7 +301,9 @@ function openSimulatorSetup(simulator) {
     detection.className = "setup-detection";
     detection.textContent = simulator === "iracing"
       ? "La conexión directa no está disponible para nuevos clientes OAuth. GridScope revisará únicamente los JSON que descargues en esta carpeta."
-      : "Si Content Manager está instalado en otra ubicación, pega aquí la ruta completa de su carpeta Sessions.";
+      : simulator === "raceroom"
+        ? "Pega tu perfil público. La carpeta local puede no existir todavía: el historial ranked se descarga desde RaceRoom."
+        : "Si Content Manager está instalado en otra ubicación, pega aquí la ruta completa de su carpeta Sessions.";
   }
   simulatorChooser.hidden = true;
   simulatorSetup.hidden = false;
@@ -300,6 +326,8 @@ async function enterSimulator(simulator, { scan = true } = {}) {
     if (!scan) return;
     if (simulator === "assetto-corsa" && appState.settings.autoScanAssettoCorsa) {
       await scanAssettoCorsaFolder({ quiet: true });
+    } else if (simulator === "raceroom" && appState.settings.autoScanRaceRoom) {
+      await syncRaceRoomHistory({ quiet: true });
     } else if (simulator === "iracing" && appState.settings.autoScanImports) {
       await scanImportFolder({ quiet: true });
     }
@@ -326,9 +354,10 @@ function formatDecimal(value) {
 }
 
 function driverIdentityText(driverId) {
-  return (appState.settings.platform || appState.league.platform) === "assetto-corsa"
-    ? "Piloto de Assetto Corsa"
-    : `ID ${driverId}`;
+  const platform = appState.settings.platform || appState.league.platform;
+  if (platform === "assetto-corsa") return "Piloto de Assetto Corsa";
+  if (platform === "raceroom") return "Piloto de RaceRoom";
+  return `ID ${driverId}`;
 }
 
 function aliasesFromField(selector) {
@@ -433,7 +462,9 @@ function trackImageUrl(trackName, layout = "") {
 
 function seriesLogoUrl(logo, seriesName) {
   const platform = appState.settings?.platform || appState.league?.platform || "iracing";
-  const fallbackName = platform === "assetto-corsa" ? "Serie de Assetto Corsa" : "Serie iRacing";
+  const fallbackName = platform === "assetto-corsa"
+    ? "Serie de Assetto Corsa"
+    : platform === "raceroom" ? "Serie de RaceRoom" : "Serie iRacing";
   return `/api/assets/series?logo=${encodeURIComponent(String(logo || ""))}&name=${encodeURIComponent(String(seriesName || fallbackName))}&platform=${encodeURIComponent(platform)}`;
 }
 
@@ -449,6 +480,8 @@ function metricHelp(label, explanation) {
 function gridScoreFormulaExplanation(platform = appState.settings?.platform || appState.league?.platform) {
   return platform === "assetto-corsa"
     ? "GridScore = Rendimiento × 75% + Limpieza × 25%. Rendimiento combina: resultado dentro de la parrilla 40%, posiciones ganadas o perdidas 15%, percentil de mejor vuelta 15%, regularidad de las vueltas 10%, porcentaje de carrera completada 10% y porcentaje de rivales recurrentes superados 10%. Si el JSON no contiene un componente, se excluye y los pesos disponibles se reajustan proporcionalmente."
+    : platform === "raceroom"
+      ? "GridScore es una métrica propia de GridScope entre 0 y 100: Rendimiento × 75% + Limpieza × 25%. Usa la posición relativa en la parrilla, posiciones ganadas, mejor vuelta cuando existe, porcentaje de distancia completada y duelos contra rivales recurrentes. Los componentes ausentes se excluyen y sus pesos se redistribuyen. No modifica el Rating ni la Reputation oficiales de RaceRoom."
     : "GridScore = Rendimiento × 75% + Limpieza × 25%. Rendimiento combina: resultado dentro de la parrilla 35%, posiciones ganadas o perdidas 15%, percentil de mejor vuelta 15%, porcentaje de carrera completada 10%, porcentaje de rivales recurrentes superados 10% y dificultad del SoF 15%. Si falta un componente, se excluye y los pesos disponibles se reajustan proporcionalmente. No modifica el iRating ni el Safety Rating oficiales.";
 }
 
@@ -459,7 +492,9 @@ function gridRatingExplanation(platform = appState.settings?.platform || appStat
 function cleanlinessFormulaExplanation(platform = appState.settings?.platform || appState.league?.platform) {
   return platform === "assetto-corsa"
     ? "Primero se normaliza el contador de incidentes a una carrera equivalente de 30 minutos: incidentes ÷ minutos conducidos × 30. Después: Limpieza = máximo entre 0 y 100 − (incidentes por 30 minutos × 12,5). Ejemplos: 0 incidentes/30 min = 100 puntos; 4 = 50; 8 o más = 0. Content Manager proporciona el contador, pero el historial no permite asegurar que todos sus valores sean exclusivamente salidas de pista."
-    : "Cuando el circuito incluye sus curvas: incidentes por 1.000 curvas = incidentes ÷ (vueltas completadas × curvas por vuelta) × 1.000; después, Limpieza = máximo entre 0 y 100 − (tasa × 1,5). Si faltan las curvas se usan incidentes por 30 minutos y se resta tasa × 8. Es una métrica de GridScope y no sustituye al Safety Rating.";
+    : platform === "raceroom"
+      ? "Limpieza es una métrica de GridScope entre 0 y 100 calculada con los Incident Points y la distancia recorrida que publica RaceRoom. Normaliza los incidentes para poder comparar carreras de distinta longitud. Es independiente de la Reputation oficial."
+      : "Cuando el circuito incluye sus curvas: incidentes por 1.000 curvas = incidentes ÷ (vueltas completadas × curvas por vuelta) × 1.000; después, Limpieza = máximo entre 0 y 100 − (tasa × 1,5). Si faltan las curvas se usan incidentes por 30 minutos y se resta tasa × 8. Es una métrica de GridScope y no sustituye al Safety Rating.";
 }
 
 function cleanlinessRatingExplanation(platform = appState.settings?.platform || appState.league?.platform) {
@@ -627,6 +662,18 @@ const platformMetricGlossaries = {
     ["gridscore", gridScoreFormulaExplanation("iracing")],
     ["gridscore medio", `Promedio del GridScore de los pilotos valorados en este periodo. Para cada piloto se usa su media ponderada reciente: ${gridRatingExplanation("iracing")}`],
     ["limpieza", cleanlinessFormulaExplanation("iracing")],
+  ]),
+  raceroom: new Map([
+    ["rating", "Rating oficial de RaceRoom que representa el nivel competitivo. GridScope muestra los valores antes y después de cada carrera y su variación; nunca lo recalcula ni lo modifica."],
+    ["rating inicial final", "Primer Rating anterior a una carrera del periodo → último Rating posterior. La diferencia es final − inicial y procede de los resultados públicos de RaceRoom."],
+    ["reputation", "Reputation oficial de RaceRoom, normalmente entre 0 y 100, que refleja la conducta en pista. Es distinta de la métrica Limpieza de GridScope."],
+    ["reputation inicial final", "Primera Reputation anterior a una carrera del periodo → última Reputation posterior. La diferencia procede directamente de RaceRoom."],
+    ["inc", "Incident Points que RaceRoom publica para ese piloto y carrera. Pueden incluir distintos tipos de incidente; GridScope no los interpreta como simples salidas de pista."],
+    ["incidentes", "Incident Points publicados por RaceRoom. El valor personal pertenece al piloto; el de parrilla suma todos los participantes mostrados."],
+    ["distancia", "Porcentaje completado = vueltas del piloto ÷ vueltas del ganador × 100. El piloto cuenta como coincidencia desde que toma la salida, pero solo puntúa si alcanza el mínimo configurado."],
+    ["gridscore", gridScoreFormulaExplanation("raceroom")],
+    ["gridscore medio", `Promedio del GridScore de los pilotos valorados. ${gridRatingExplanation("raceroom")}`],
+    ["limpieza", cleanlinessFormulaExplanation("raceroom")]
   ])
 };
 
@@ -1075,6 +1122,7 @@ function miniLeagueClassification(league) {
 function renderMiniPeriodComparison(league) {
   const container = document.querySelector("#miniLeaguePeriodComparison");
   const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const isRaceRoom = (appState.settings.platform || appState.league.platform) === "raceroom";
   const periods = miniLeaguePeriodsFor(activeMiniLeagueScope);
   const currentIndex = periods.indexOf(league);
   const previous = currentIndex >= 0 ? periods[currentIndex + 1] : null;
@@ -1137,14 +1185,16 @@ function renderMiniPeriodComparison(league) {
 }
 
 function renderMiniLeagues() {
-  const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const platform = appState.settings.platform || appState.league.platform;
+  const isAssetto = platform === "assetto-corsa";
+  const isRaceRoom = platform === "raceroom";
   const ratingSortButton = document.querySelector("#miniRatingSort");
   const safetySortButton = document.querySelector("#miniSafetySort");
   const incidentsSortButton = document.querySelector("#miniIncidentsSort");
   ratingSortButton.dataset.miniSort = isAssetto ? "gridScore" : "iratingEnd";
-  ratingSortButton.innerHTML = `${isAssetto ? "GridScore" : "iRating"}<span class="sort-indicator">↕</span>`;
+  ratingSortButton.innerHTML = `${isAssetto ? "GridScore" : isRaceRoom ? "Rating" : "iRating"}<span class="sort-indicator">↕</span>`;
   safetySortButton.dataset.miniSort = isAssetto ? "cleanlinessScore" : "safetyRatingEnd";
-  safetySortButton.innerHTML = `${isAssetto ? "Limpieza" : "SR"}<span class="sort-indicator">↕</span>`;
+  safetySortButton.innerHTML = `${isAssetto ? "Limpieza" : isRaceRoom ? "Reputation" : "SR"}<span class="sort-indicator">↕</span>`;
   incidentsSortButton.innerHTML = `Inc./carrera<span class="sort-indicator">↕</span>`;
   document.querySelector("#miniGridScoreColumn").hidden = isAssetto;
   document.querySelector("#miniCleanlinessColumn").hidden = isAssetto;
@@ -1453,6 +1503,7 @@ function openMiniLeagueDriverDetail(iracingId) {
     String(participant.iracingId)
   );
   const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const isRaceRoom = (appState.settings.platform || appState.league.platform) === "raceroom";
   const gridRating = participant.gridRating;
   sessionDriverDialog.dataset.driverId = participant.iracingId;
   sessionDriverDialog.dataset.miniLeagueScope = activeMiniLeagueScope;
@@ -1480,11 +1531,11 @@ function openMiniLeagueDriverDetail(iracingId) {
       </article>
     </div>` : ""}${isAssetto ? "" : `<div class="driver-rating-highlights">
       <article class="irating-highlight">
-        <div><small>${metricHelp("iRating en el periodo", "Valor al finalizar la última carrera registrada del periodo. La línea inferior muestra el valor inicial, el final y la variación.")}</small><strong>${participant.iratingEnd == null ? "—" : formatInteger(participant.iratingEnd)}</strong></div>
+        <div><small>${metricHelp(isRaceRoom ? "Rating en el periodo" : "iRating en el periodo", isRaceRoom ? "Rating oficial de RaceRoom al finalizar la última carrera registrada. Debajo se muestran el valor anterior inicial, el posterior final y su diferencia." : "Valor al finalizar la última carrera registrada del periodo. La línea inferior muestra el valor inicial, el final y la variación.")}</small><strong>${participant.iratingEnd == null ? "—" : formatInteger(participant.iratingEnd)}</strong></div>
         <span class="${Number(participant.iratingChange) > 0 ? "positive" : Number(participant.iratingChange) < 0 ? "negative" : "neutral"}">${participant.iratingEnd == null ? "No disponible" : `${participant.iratingStart == null ? "—" : formatInteger(participant.iratingStart)} → ${formatInteger(participant.iratingEnd)} · ${formatSigned(participant.iratingChange)}`}</span>
       </article>
       <article class="safety-highlight">
-        <div><small>${metricHelp("Safety Rating en el periodo", "Safety Rating al finalizar la última carrera registrada. La línea inferior muestra el valor inicial, el final y la variación.")}</small><strong>${participant.safetyRatingEnd == null ? "—" : formatDecimal(participant.safetyRatingEnd)}</strong></div>
+        <div><small>${metricHelp(isRaceRoom ? "Reputation en el periodo" : "Safety Rating en el periodo", isRaceRoom ? "Reputation oficial de RaceRoom al finalizar la última carrera. Debajo se muestra la evolución real publicada." : "Safety Rating al finalizar la última carrera registrada. La línea inferior muestra el valor inicial, el final y la variación.")}</small><strong>${participant.safetyRatingEnd == null ? "—" : formatDecimal(participant.safetyRatingEnd)}</strong></div>
         <span class="${Number(participant.safetyRatingChange) > 0 ? "positive" : Number(participant.safetyRatingChange) < 0 ? "negative" : "neutral"}">${participant.safetyRatingEnd == null ? "No disponible" : `${participant.safetyRatingStart == null ? "—" : formatDecimal(participant.safetyRatingStart)} → ${formatDecimal(participant.safetyRatingEnd)} · ${formatSigned(participant.safetyRatingChange)}`}</span>
       </article>
     </div>`}
@@ -1572,6 +1623,7 @@ async function openSessionDetail(week) {
     currentSessionDetail = detail;
     const session = detail.session;
     const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+    const isRaceRoom = (appState.settings.platform || appState.league.platform) === "raceroom";
     const repeated = detail.drivers.filter((driver) => driver.repeated);
     const ownerSessionDriver = detail.drivers.find((driver) => driver.isOwner);
     document.querySelector("#sessionDetailKicker").textContent =
@@ -1587,7 +1639,7 @@ async function openSessionDetail(week) {
         <article><small>Carreras</small><strong>${session.raceCount}</strong></article>
         <article><small>Pilotos únicos</small><strong>${session.uniqueDrivers}</strong></article>
         <article><small>Recurrentes</small><strong>${session.repeatedDrivers}</strong></article>
-        <article><small>${isAssetto ? "Tu GridScore" : "SoF medio"}</small><strong>${isAssetto ? ownerSessionDriver?.gridRating ? formatDecimal(ownerSessionDriver.gridRating.gridScore) : "—" : session.averageSof ? formatInteger(session.averageSof) : "—"}</strong></article>
+        <article><small>${isAssetto ? "Tu GridScore" : isRaceRoom ? "Tu Rating" : "SoF medio"}</small><strong>${isAssetto ? ownerSessionDriver?.gridRating ? formatDecimal(ownerSessionDriver.gridRating.gridScore) : "—" : isRaceRoom ? ownerSessionDriver?.iratingEnd == null ? "—" : formatInteger(ownerSessionDriver.iratingEnd) : session.averageSof ? formatInteger(session.averageSof) : "—"}</strong></article>
         ${isAssetto ? "" : `<article><small>${metricHelp("Tu GridScore", gridRatingExplanation())}</small><strong>${ownerSessionDriver?.gridRating ? formatDecimal(ownerSessionDriver.gridRating.gridScore) : "—"}</strong></article>`}
         <article><small>${metricHelp("Incidentes de parrilla", fieldContactExplanation(isAssetto ? "assetto-corsa" : "iracing", "esta semana"))}</small><strong>${formatInteger(session.totalIncidents)}x</strong></article>
         <article><small>Tus carreras</small><strong>${session.ownerRaces}</strong></article>
@@ -1608,8 +1660,8 @@ async function openSessionDetail(week) {
               <div class="repeat-driver-stats">
                 <span><small>Mejor</small><strong>P${driver.bestFinish}</strong></span>
                 <span><small>Inc.</small><strong>${formatDecimal(driver.averageIncidents)}x</strong></span>
-                <span class="repeat-rating"><small>${isAssetto ? "GridScore" : "iRating"}</small><strong>${isAssetto ? driver.gridRating ? formatDecimal(driver.gridRating.gridScore) : "—" : driver.iratingEnd == null ? "—" : formatInteger(driver.iratingEnd)}</strong><em>${isAssetto ? driver.gridRating ? formatSigned(driver.gridRating.gridScoreChange) : "" : driver.iratingEnd == null ? "" : formatSigned(driver.iratingChange)}</em></span>
-                <span class="repeat-rating"><small>${isAssetto ? "Limpieza" : "Safety Rating"}</small><strong>${isAssetto ? driver.gridRating ? formatDecimal(driver.gridRating.cleanlinessScore) : "—" : driver.safetyRatingEnd == null ? "—" : formatDecimal(driver.safetyRatingEnd)}</strong><em>${isAssetto ? driver.gridRating?.confidence || "" : driver.safetyRatingEnd == null ? "" : formatSigned(driver.safetyRatingChange)}</em></span>
+                <span class="repeat-rating"><small>${isAssetto ? "GridScore" : isRaceRoom ? "Rating" : "iRating"}</small><strong>${isAssetto ? driver.gridRating ? formatDecimal(driver.gridRating.gridScore) : "—" : driver.iratingEnd == null ? "—" : formatInteger(driver.iratingEnd)}</strong><em>${isAssetto ? driver.gridRating ? formatSigned(driver.gridRating.gridScoreChange) : "" : driver.iratingEnd == null ? "" : formatSigned(driver.iratingChange)}</em></span>
+                <span class="repeat-rating"><small>${isAssetto ? "Limpieza" : isRaceRoom ? "Reputation" : "Safety Rating"}</small><strong>${isAssetto ? driver.gridRating ? formatDecimal(driver.gridRating.cleanlinessScore) : "—" : driver.safetyRatingEnd == null ? "—" : formatDecimal(driver.safetyRatingEnd)}</strong><em>${isAssetto ? driver.gridRating?.confidence || "" : driver.safetyRatingEnd == null ? "" : formatSigned(driver.safetyRatingChange)}</em></span>
                 ${isAssetto ? "" : `<span class="repeat-rating"><small>GridScore</small><strong>${driver.gridRating ? formatDecimal(driver.gridRating.gridScore) : "—"}</strong><em>GridScope</em></span>
                 <span class="repeat-rating"><small>Limpieza</small><strong>${driver.gridRating ? formatDecimal(driver.gridRating.cleanlinessScore) : "—"}</strong><em>${driver.gridRating?.confidence || ""}</em></span>`}
                 <span><small>Frente a ti</small><strong>${driver.isOwner ? "Referencia" : driver.meetingsWithOwner ? `${driver.ownerAhead}-${driver.rivalAhead}` : "—"}</strong></span>
@@ -1626,7 +1678,7 @@ async function openSessionDetail(week) {
         <div class="session-race-strip">
           ${detail.races.map((race) => `
             <button type="button" data-session-race-id="${race.id}">
-              <span><strong>${formatRaceDate(race.startTime)}</strong><small>${isAssetto ? `${race.fieldSize} pilotos` : `Split ${race.splitNumber || "—"}${race.splitTotal ? ` / ${race.splitTotal}` : ""} · SoF ${formatInteger(race.strengthOfField)} · ${race.fieldSize} pilotos`}</small></span>
+              <span><strong>${formatRaceDate(race.startTime)}</strong><small>${isAssetto || isRaceRoom ? `${race.fieldSize} pilotos${isRaceRoom ? " · RaceRoom ranked" : ""}` : `Split ${race.splitNumber || "—"}${race.splitTotal ? ` / ${race.splitTotal}` : ""} · SoF ${formatInteger(race.strengthOfField)} · ${race.fieldSize} pilotos`}</small></span>
               <span class="session-owner-result"><small>Tu resultado</small><strong>${race.ownerResult ? `P${race.ownerResult.finishPosition} · ${race.ownerResult.incidents}x${race.ownerResult.gridScore != null ? ` · GS ${formatDecimal(race.ownerResult.gridScore)}` : ""}` : "No participaste"}</strong></span>
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
             </button>`).join("")}
@@ -1699,6 +1751,7 @@ function openSessionDriverDetail(iracingId) {
   delete sessionDriverDialog.dataset.miniLeagueScope;
   const session = currentSessionDetail.session;
   const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const isRaceRoom = (appState.settings.platform || appState.league.platform) === "raceroom";
   const gridRating = driver.gridRating;
   document.querySelector("#sessionDriverKicker").textContent =
     `${shortSeason(session.season)} · Semana ${session.week} · ${driver.appearances} carrera${driver.appearances === 1 ? "" : "s"}`;
@@ -1716,13 +1769,13 @@ function openSessionDriverDetail(iracingId) {
       </article>
     </div>` : ""}${isAssetto ? "" : `<div class="driver-rating-highlights">
       <article class="irating-highlight">
-        <div><small>iRating actual en esta sesión</small><strong>${driver.iratingEnd == null ? "—" : formatInteger(driver.iratingEnd)}</strong></div>
+        <div><small>${isRaceRoom ? "Rating actual en esta sesión" : "iRating actual en esta sesión"}</small><strong>${driver.iratingEnd == null ? "—" : formatInteger(driver.iratingEnd)}</strong></div>
         <span class="${Number(driver.iratingChange) > 0 ? "positive" : Number(driver.iratingChange) < 0 ? "negative" : "neutral"}">
           ${driver.iratingEnd == null ? "No incluido en el JSON" : `${driver.iratingStart == null ? "—" : formatInteger(driver.iratingStart)} → ${formatInteger(driver.iratingEnd)} · ${formatSigned(driver.iratingChange)}`}
         </span>
       </article>
       <article class="safety-highlight">
-        <div><small>Safety Rating actual en esta sesión</small><strong>${driver.safetyRatingEnd == null ? "—" : formatDecimal(driver.safetyRatingEnd)}</strong></div>
+        <div><small>${isRaceRoom ? "Reputation actual en esta sesión" : "Safety Rating actual en esta sesión"}</small><strong>${driver.safetyRatingEnd == null ? "—" : formatDecimal(driver.safetyRatingEnd)}</strong></div>
         <span class="${Number(driver.safetyRatingChange) > 0 ? "positive" : Number(driver.safetyRatingChange) < 0 ? "negative" : "neutral"}">
           ${driver.safetyRatingEnd == null ? "No incluido en el JSON" : `${driver.safetyRatingStart == null ? "—" : formatDecimal(driver.safetyRatingStart)} → ${formatDecimal(driver.safetyRatingEnd)} · ${formatSigned(driver.safetyRatingChange)}`}
         </span>
@@ -2000,6 +2053,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
     const event = detail.event;
     const summary = detail.summary;
     const isAssetto = event.platform === "assetto-corsa";
+    const isRaceRoom = event.platform === "raceroom";
     document.querySelector("#raceDetailKicker").textContent =
       `Semana ${event.week} · ${formatRaceDate(event.startTime)}`;
     document.querySelector("#raceDetailTitle").textContent =
@@ -2030,7 +2084,18 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
           ["Sesión", escapeHtml(event.sessionName || "Race")],
           ["Servidor", escapeHtml(event.serverName || "Local")],
         ]
-      : [
+      : isRaceRoom
+        ? [
+            ["Origen", "RaceRoom ranked"],
+            ["Parrilla", event.fieldSize],
+            ["Vueltas del ganador", event.eventLapsComplete || "—"],
+            ["Vuelta rápida", formatLapTime(fastest)],
+            [metricHelp("Incidentes de parrilla", "Suma de los Incident Points publicados por RaceRoom para todos los pilotos de esta carrera."), `${summary.totalIncidents}x`],
+            ["Tu distancia", summary.ownerResult?.distancePercent == null ? "—" : `${formatDecimal(summary.ownerResult.distancePercent)}%`],
+            ["Tu Rating", summary.ownerResult?.newIRating == null ? "—" : formatInteger(summary.ownerResult.newIRating)],
+            ["Tu Reputation", summary.ownerResult?.newSafetyRating == null ? "—" : formatDecimal(summary.ownerResult.newSafetyRating)]
+          ]
+        : [
           ["Split", `${event.splitNumber || "—"}${event.splitTotal ? ` / ${event.splitTotal}` : ""}`],
           ["SoF", formatInteger(event.strengthOfField)],
           ["Parrilla", event.fieldSize],
@@ -2046,11 +2111,11 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
                 [metricHelp("Tu limpieza", cleanlinessFormulaExplanation("iracing")), formatDecimal(summary.ownerResult.cleanlinessScore)]
               ]
             : []),
-        ];
+          ];
     document.querySelector("#raceDetailContent").innerHTML = `
       <div class="track-detail-hero race-track-hero">
         <img src="${trackImageUrl(event.track, event.layout)}" alt="${escapeHtml(event.track)}">
-        <div><small>${isAssetto ? "Historial de Content Manager" : "Resultado oficial"}</small><strong>${escapeHtml(event.track)}</strong><span>${escapeHtml(event.layout || "Trazado principal")} · ${escapeHtml(event.seriesName)}</span></div>
+        <div><small>${isAssetto ? "Historial de Content Manager" : isRaceRoom ? "Historial ranked de RaceRoom" : "Resultado oficial"}</small><strong>${escapeHtml(event.track)}</strong><span>${escapeHtml(event.layout || "Trazado principal")} · ${escapeHtml(event.seriesName)}</span></div>
       </div>
       <div class="race-detail-meta">
         ${raceMeta.map(([label, value]) => `<article><small>${label}</small><strong>${value}</strong></article>`).join("")}
@@ -2058,7 +2123,9 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
       <div class="race-extra-line">
         ${isAssetto
           ? `<span>${escapeHtml(event.rawTrackId || event.track)}</span><span>Los incidentes proceden del contador guardado por Content Manager</span>`
-          : `<span>Subsession ${escapeHtml(event.externalEventId)}</span>
+          : isRaceRoom
+            ? `<span>Race hash ${escapeHtml(event.externalEventId)}</span><span>Rating y Reputation proceden del resultado público de RaceRoom</span><span>Los pilotos bajo la distancia mínima aparecen, pero no puntúan</span>`
+            : `<span>Subsession ${escapeHtml(event.externalEventId)}</span>
              <span>${event.cautions || 0} cautions · ${event.cautionLaps || 0} vueltas bajo caution</span>
              <span>${weather.humidity != null ? `Humedad ${weather.humidity}%` : "Clima no disponible"}</span>
              ${event.telemetryFiles?.length ? `<span class="telemetry-race-note">${event.telemetryFiles.length} IBT · ${event.telemetryFiles[0].channelCount} canales · ${event.telemetryFiles[0].tickRate} Hz</span>` : ""}`}
@@ -2076,7 +2143,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
             <tr>
               <th>Pos.</th><th>Piloto</th><th class="numeric">Salida</th><th class="numeric">± Pos.</th>
               <th class="numeric">Inc.</th><th class="numeric">Vueltas</th>${isAssetto ? '<th class="numeric">Válidas</th>' : '<th class="numeric">Lideradas</th>'}
-              <th class="numeric">Mejor vuelta</th><th class="numeric">Media</th>${isAssetto ? `<th class="numeric">Consistencia</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("assetto-corsa"))}</th><th>Neumáticos</th><th>Coche</th>` : `<th class="numeric">Intervalo</th><th class="numeric">iRating</th><th class="numeric">SR</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("iracing"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("iracing"))}</th><th class="numeric">Puntos</th>`}<th>Estado</th>
+              <th class="numeric">Mejor vuelta</th><th class="numeric">Media</th>${isAssetto ? `<th class="numeric">Consistencia</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("assetto-corsa"))}</th><th>Neumáticos</th><th>Coche</th>` : `<th class="numeric">Intervalo</th><th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("iracing"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("iracing"))}</th><th class="numeric">Puntos</th>`}<th>Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -2301,13 +2368,15 @@ function renderOwnerSeasonOverview() {
   const stats = document.querySelector("#ownerSeasonStats");
   const tracks = document.querySelector("#ownerTrackBreakdown");
   const races = document.querySelector("#ownerSeasonRaces");
-  const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const platform = appState.settings.platform || appState.league.platform;
+  const isAssetto = platform === "assetto-corsa";
+  const isRaceRoom = platform === "raceroom";
   const racesHead = document.querySelector(".owner-season-races-table thead");
   racesHead.innerHTML = `<tr>
     <th>Carrera</th>${isAssetto ? "" : '<th class="numeric">Split</th><th class="numeric">SoF</th>'}
     <th class="numeric">Salida</th><th class="numeric">Meta</th><th class="numeric">± Pos.</th>
     <th class="numeric">Tus inc.</th>
-    ${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : `<th class="numeric">iRating</th><th class="numeric">SR</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>`}<th></th>
+    ${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : `<th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>`}<th></th>
   </tr>`;
   document.querySelector("#ownerSeasonKicker").textContent =
     appState.league.isCurrent ? "Piloto de referencia · Temporada actual" : "Piloto de referencia · Temporada histórica";
@@ -2343,8 +2412,8 @@ function renderOwnerSeasonOverview() {
     <article><small>${metricHelp("Tus incidentes", personalContactExplanation(isAssetto ? "assetto-corsa" : "iracing"))}</small><strong>${summary.totalIncidents}x</strong><span>${formatDecimal(summary.averageIncidents)}x de media personal por carrera</span></article>
     <article><small>Vueltas</small><strong>${formatInteger(summary.lapsComplete)}</strong><span>${formatInteger(summary.lapsLed)} lideradas</span></article>
     <article><small>${isAssetto ? metricHelp("GridScore", gridRatingExplanation()) : "SoF medio"}</small><strong>${isAssetto ? gridRating ? formatDecimal(gridRating.gridScore) : "—" : summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>${isAssetto && gridRating ? `${formatDecimal(gridRating.gridScoreStart)} → ${formatDecimal(gridRating.gridScore)} · ${formatSigned(gridRating.gridScoreChange)}` : isAssetto ? "sin valoración disponible" : "nivel medio de las parrillas"}</span></article>
-    <article><small>${isAssetto ? metricHelp("Limpieza", cleanlinessRatingExplanation()) : "iRating"}</small><strong>${isAssetto ? gridRating ? formatDecimal(gridRating.cleanlinessScore) : "—" : summary.iratingEnd == null ? "—" : formatInteger(summary.iratingEnd)}</strong><span>${isAssetto && gridRating ? `${formatDecimal(gridRating.cleanlinessStart)} → ${formatDecimal(gridRating.cleanlinessScore)} · ${formatSigned(gridRating.cleanlinessChange)}` : isAssetto ? "sin valoración disponible" : summary.iratingStart == null || summary.iratingEnd == null ? "evolución no disponible" : `${formatInteger(summary.iratingStart)} → ${formatInteger(summary.iratingEnd)} · ${formatSigned(summary.iratingChange)}`}</span></article>
-    <article><small>${isAssetto ? metricHelp("Confianza", confidenceExplanation()) : "Safety Rating"}</small><strong>${isAssetto ? gridRating?.confidence || "—" : summary.safetyRatingEnd == null ? "—" : formatDecimal(summary.safetyRatingEnd)}</strong><span>${isAssetto && gridRating ? `${gridRating.ratedRaces} carreras · ${formatInteger(Math.round(gridRating.drivingMinutes))} min` : isAssetto ? "sin valoración disponible" : summary.safetyRatingStart == null || summary.safetyRatingEnd == null ? "evolución no disponible" : `${formatDecimal(summary.safetyRatingStart)} → ${formatDecimal(summary.safetyRatingEnd)} · ${formatSigned(summary.safetyRatingChange)}`}</span></article>
+    <article><small>${isAssetto ? metricHelp("Limpieza", cleanlinessRatingExplanation()) : isRaceRoom ? metricHelp("Rating", "Valor competitivo oficial de RaceRoom. Se muestra el primer valor antes de una carrera, el último valor posterior y la diferencia del periodo.") : "iRating"}</small><strong>${isAssetto ? gridRating ? formatDecimal(gridRating.cleanlinessScore) : "—" : summary.iratingEnd == null ? "—" : formatInteger(summary.iratingEnd)}</strong><span>${isAssetto && gridRating ? `${formatDecimal(gridRating.cleanlinessStart)} → ${formatDecimal(gridRating.cleanlinessScore)} · ${formatSigned(gridRating.cleanlinessChange)}` : isAssetto ? "sin valoración disponible" : summary.iratingStart == null || summary.iratingEnd == null ? "evolución no disponible" : `${formatInteger(summary.iratingStart)} → ${formatInteger(summary.iratingEnd)} · ${formatSigned(summary.iratingChange)}`}</span></article>
+    <article><small>${isAssetto ? metricHelp("Confianza", confidenceExplanation()) : isRaceRoom ? metricHelp("Reputation", "Valor oficial de conducta de RaceRoom, normalmente entre 0 y 100. Se muestra la evolución real publicada en los resultados; no es la Limpieza calculada por GridScope.") : "Safety Rating"}</small><strong>${isAssetto ? gridRating?.confidence || "—" : summary.safetyRatingEnd == null ? "—" : formatDecimal(summary.safetyRatingEnd)}</strong><span>${isAssetto && gridRating ? `${gridRating.ratedRaces} carreras · ${formatInteger(Math.round(gridRating.drivingMinutes))} min` : isAssetto ? "sin valoración disponible" : summary.safetyRatingStart == null || summary.safetyRatingEnd == null ? "evolución no disponible" : `${formatDecimal(summary.safetyRatingStart)} → ${formatDecimal(summary.safetyRatingEnd)} · ${formatSigned(summary.safetyRatingChange)}`}</span></article>
     ${isAssetto ? "" : `
       <article><small>${metricHelp("GridScore", gridRatingExplanation())}</small><strong>${gridRating ? formatDecimal(gridRating.gridScore) : "—"}</strong><span>${gridRating ? `${formatDecimal(gridRating.gridScoreStart)} → ${formatDecimal(gridRating.gridScore)} · ${formatSigned(gridRating.gridScoreChange)}` : "sin valoración disponible"}</span></article>
       <article><small>${metricHelp("Limpieza GridScope", cleanlinessRatingExplanation())}</small><strong>${gridRating ? formatDecimal(gridRating.cleanlinessScore) : "—"}</strong><span>${gridRating ? `${formatDecimal(gridRating.cleanlinessStart)} → ${formatDecimal(gridRating.cleanlinessScore)} · ${formatSigned(gridRating.cleanlinessChange)}` : "sin valoración disponible"}</span></article>
@@ -2612,43 +2681,54 @@ function renderGlobalOverview() {
 function renderPlatformContext() {
   const platform = appState.settings.platform || appState.league.platform || "iracing";
   const isAssetto = platform === "assetto-corsa";
+  const isRaceRoom = platform === "raceroom";
   const copy = simulatorCopy[platform] || simulatorCopy.iracing;
   document.body.dataset.simulator = platform;
   document.querySelectorAll("[data-simulator-only]").forEach((element) => {
     element.hidden = element.dataset.simulatorOnly !== platform;
   });
   document.querySelectorAll("[data-iracing-only]").forEach((element) => {
-    element.hidden = isAssetto;
+    element.hidden = platform !== "iracing";
   });
   document.querySelector("#simulatorSwitchMark").textContent = copy.mark;
   document.querySelector("#simulatorSwitchName").textContent = copy.name;
   document.querySelector("#settingsTitle").textContent = `Configuración de ${copy.name}`;
   document.querySelector("#settingsDescription").textContent = isAssetto
     ? "Reglas, carpeta de Content Manager y conservación del historial local."
-    : "Reglas, resultados oficiales, OAuth y telemetrías locales.";
+    : isRaceRoom
+      ? "Reglas, perfil público, sincronización ranked y resultados locales."
+      : "Reglas, resultados oficiales, OAuth y telemetrías locales.";
   document.querySelector("#ownerIdentityLabel").textContent = isAssetto
     ? "Mi nombre en Assetto Corsa"
-    : "Mi ID de iRacing";
+    : isRaceRoom ? "Mi nombre en RaceRoom" : "Mi ID de iRacing";
   document.querySelector("#ownerIdentityHelp").textContent = isAssetto
     ? "Este será el nombre principal que se mostrará en tus estadísticas."
-    : "Se utiliza para las comparativas y para destacar tus resultados.";
-  document.querySelector("#ownerIracingIdSetting").inputMode = isAssetto ? "text" : "numeric";
+    : isRaceRoom
+      ? "Se obtiene de tu perfil público y se utiliza para destacar tus resultados."
+      : "Se utiliza para las comparativas y para destacar tus resultados.";
+  document.querySelector("#ownerIracingIdSetting").inputMode = platform === "iracing" ? "numeric" : "text";
   document.querySelector("#ownerAliasesSettingField").hidden = !isAssetto;
   document.querySelector('#tiebreakerSetting option[value="incidents"]').textContent =
     "Menor media de incidentes";
   document.querySelector("#syncRoundsButton").innerHTML = isAssetto
     ? '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8m0-5v5h-5" /></svg>Buscar en Content Manager'
-    : '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8m0-5v5h-5" /></svg>Buscar resultados';
+    : isRaceRoom
+      ? '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8m0-5v5h-5" /></svg>Sincronizar RaceRoom'
+      : '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8m0-5v5h-5" /></svg>Buscar resultados';
 
   const cleanCardLabel = document.querySelector("#cleanName")?.parentElement?.querySelector("small");
   const fieldCardLabel = document.querySelector("#sofValue")?.parentElement?.querySelector("small");
   if (cleanCardLabel) cleanCardLabel.textContent = isAssetto ? "Menos incidentes" : "Más limpio";
-  if (fieldCardLabel) fieldCardLabel.textContent = isAssetto ? "Pilotos registrados" : "SoF medio";
+  if (fieldCardLabel) fieldCardLabel.textContent = isAssetto
+    ? "Pilotos registrados"
+    : isRaceRoom ? "Rating medio" : "SoF medio";
 }
 
 function renderSettings() {
   renderPlatformContext();
-  const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const platform = appState.settings.platform || appState.league.platform;
+  const isAssetto = platform === "assetto-corsa";
+  const isRaceRoom = platform === "raceroom";
   document.querySelector("#rankingModeSetting").value = appState.settings.rankingMode;
   document.querySelector("#minimumParticipationSetting").value = appState.settings.minimumParticipation;
   document.querySelector("#tiebreakerSetting").value = appState.settings.tiebreaker;
@@ -2675,10 +2755,17 @@ function renderSettings() {
   document.querySelector("#assettoInstallFolderSetting").value =
     appState.settings.assettoCorsaInstallFolder || "";
   document.querySelector("#autoScanAssettoSetting").checked = Boolean(appState.settings.autoScanAssettoCorsa);
+  document.querySelector("#raceRoomProfileSetting").value = appState.settings.raceRoomProfileUrl || "";
+  document.querySelector("#raceRoomFolderSetting").value = appState.settings.raceRoomResultsFolder || "";
+  document.querySelector("#raceRoomMinimumDistanceSetting").value = appState.settings.raceRoomMinimumDistance || 50;
+  document.querySelector("#autoScanRaceRoomSetting").checked = Boolean(appState.settings.autoScanRaceRoom);
+  document.querySelector("#raceRoomSyncStatus").textContent = appState.settings.raceRoomLastSync
+    ? `Última sincronización: ${new Date(appState.settings.raceRoomLastSync).toLocaleString("es-ES")}.`
+    : "Todavía no se ha sincronizado el historial ranked.";
   const demoPill = document.querySelector(".demo-pill");
   demoPill.innerHTML = appState.demoMode
     ? "<span></span> Datos de demostración"
-    : `<span></span> ${isAssetto ? "Assetto Corsa" : `${appState.storage.importCount} archivo${appState.storage.importCount === 1 ? "" : "s"} importado${appState.storage.importCount === 1 ? "" : "s"}`}`;
+    : `<span></span> ${isAssetto ? "Assetto Corsa" : isRaceRoom ? "RaceRoom" : `${appState.storage.importCount} archivo${appState.storage.importCount === 1 ? "" : "s"} importado${appState.storage.importCount === 1 ? "" : "s"}`}`;
 
   const oauth = appState.oauth || {};
   const oauthInput = document.querySelector("#oauthClientId");
@@ -2859,8 +2946,11 @@ document.querySelector("#syncRoundsButton").addEventListener("click", async () =
   const button = document.querySelector("#syncRoundsButton");
   setButtonBusy(button, true, "Buscando resultados…");
   try {
-    if ((appState.settings.platform || appState.league.platform) === "assetto-corsa") {
+    const platform = appState.settings.platform || appState.league.platform;
+    if (platform === "assetto-corsa") {
       await scanAssettoCorsaFolder();
+    } else if (platform === "raceroom") {
+      await syncRaceRoomHistory();
     } else {
       await scanImportFolder();
     }
@@ -3537,6 +3627,89 @@ document.querySelector("#autoScanAssettoSetting").addEventListener("change", asy
   if (!saved) event.target.checked = Boolean(appState.settings.autoScanAssettoCorsa);
 });
 
+async function syncRaceRoomHistory({ quiet = false, background = false } = {}) {
+  const status = document.querySelector("#raceRoomSyncStatus");
+  const button = document.querySelector("#syncRaceRoomButton");
+  const activity = background
+    ? null
+    : beginActivity(
+        "Sincronizando RaceRoom…",
+        "Consultando el historial ranked y guardando un lote de hasta 25 carreras. Esta operación puede tardar unos segundos."
+      );
+  if (!background) setButtonBusy(button, true, "Sincronizando…");
+  if (!quiet) status.textContent = "Consultando el perfil público y comparando las carreras guardadas…";
+  try {
+    const result = await apiRequest("/api/raceroom/sync", {
+      method: "POST",
+      body: JSON.stringify({ maximumNew: 25 })
+    });
+    if (result.imported) {
+      await loadState({ quiet: true, preserveContext: background });
+    }
+    const progress = result.remaining
+      ? `${result.remaining} pendientes; pulsa de nuevo para continuar`
+      : "historial al día";
+    status.textContent = `Última sincronización: ${result.reviewed} revisadas · ${result.imported} nuevas · ${progress}. Distancia mínima: ${result.minimumDistance}%.`;
+    if (!quiet || result.imported) {
+      showToast(
+        result.imported ? `${result.imported} carreras de RaceRoom importadas` : "RaceRoom está al día",
+        result.remaining ? `Quedan ${result.remaining} carreras por incorporar.` : "No quedan resultados ranked pendientes.",
+        background ? { subtle: true, duration: 1800 } : undefined
+      );
+    }
+    return result;
+  } catch (error) {
+    status.textContent = error.message;
+    if (!quiet) showToast("No se ha podido sincronizar RaceRoom", error.message);
+    return null;
+  } finally {
+    if (!background) setButtonBusy(button, false);
+    if (activity != null) endActivity(activity);
+  }
+}
+
+async function saveRaceRoomSettings({ syncAfterSave = false } = {}) {
+  const profile = document.querySelector("#raceRoomProfileSetting").value.trim();
+  const folder = document.querySelector("#raceRoomFolderSetting").value.trim();
+  const minimumDistance = Number(document.querySelector("#raceRoomMinimumDistanceSetting").value);
+  const autoScan = document.querySelector("#autoScanRaceRoomSetting").checked;
+  try {
+    const saved = await apiRequest("/api/simulators/config", {
+      method: "PUT",
+      body: JSON.stringify({
+        simulator: "raceroom",
+        ownerIdentity: profile,
+        folder,
+        minimumDistance,
+        autoScan
+      })
+    });
+    appState.settings.raceRoomProfileUrl = saved.ownerIdentity;
+    appState.settings.raceRoomResultsFolder = saved.folder;
+    appState.settings.raceRoomMinimumDistance = saved.minimumDistance;
+    appState.settings.autoScanRaceRoom = saved.autoScan;
+    document.querySelector("#raceRoomProfileSetting").value = saved.ownerIdentity;
+    document.querySelector("#raceRoomFolderSetting").value = saved.folder;
+    if (syncAfterSave) await syncRaceRoomHistory({ quiet: true });
+    showToast("RaceRoom configurado", "El perfil se ha validado y la configuración queda guardada.");
+    return true;
+  } catch (error) {
+    showToast("Configuración no válida", error.message);
+    return false;
+  }
+}
+
+document.querySelector("#saveRaceRoomSettingsButton").addEventListener("click", () => {
+  saveRaceRoomSettings();
+});
+document.querySelector("#syncRaceRoomButton").addEventListener("click", () => {
+  syncRaceRoomHistory();
+});
+document.querySelector("#autoScanRaceRoomSetting").addEventListener("change", async (event) => {
+  const saved = await saveRaceRoomSettings({ syncAfterSave: event.target.checked });
+  if (!saved) event.target.checked = Boolean(appState.settings.autoScanRaceRoom);
+});
+
 async function scanTelemetryFolder({ quiet = false, background = false } = {}) {
   const status = document.querySelector("#telemetryScanStatus");
   const scanButton = document.querySelector("#scanTelemetryFolderButton");
@@ -3716,6 +3889,7 @@ document.querySelector("#simulatorSetupForm").addEventListener("submit", async (
         ownerAliases: aliasesFromField("#setupOwnerAliases"),
         folder: document.querySelector("#setupFolder").value.trim(),
         installFolder: document.querySelector("#setupInstallFolder").value.trim(),
+        minimumDistance: Number(document.querySelector("#setupMinimumDistance").value),
         autoScan: document.querySelector("#setupAutoScan").checked
       })
     });
@@ -3726,6 +3900,9 @@ document.querySelector("#simulatorSetupForm").addEventListener("submit", async (
     if (simulator === "assetto-corsa") {
       showToast("Analizando Content Manager", "La primera importación puede tardar unos segundos.");
       await scanAssettoCorsaFolder({ quiet: true });
+    } else if (simulator === "raceroom") {
+      showToast("Sincronizando RaceRoom", "Se importará el primer lote de 25 carreras ranked.");
+      await syncRaceRoomHistory({ quiet: true });
     } else {
       await scanImportFolder({ quiet: true });
     }
@@ -3781,6 +3958,8 @@ async function runAutomaticScans() {
     const platform = appState.settings.platform || appState.league.platform;
     if (platform === "assetto-corsa" && appState.settings.autoScanAssettoCorsa) {
       await scanAssettoCorsaFolder({ quiet: true, background: true });
+    } else if (platform === "raceroom" && appState.settings.autoScanRaceRoom) {
+      await syncRaceRoomHistory({ quiet: true, background: true });
     } else if (platform === "iracing" && appState.settings.autoScanImports) {
       await scanImportFolder({ quiet: true, background: true });
     }

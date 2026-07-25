@@ -76,9 +76,7 @@ try {
 
     if (-not $SkipExecutable) {
         $executable = Join-Path $projectRoot "dist\GridScope.exe"
-        if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
-            & (Join-Path $PSScriptRoot "crear-ejecutable-windows.ps1") -SkipTests
-        }
+        & (Join-Path $PSScriptRoot "crear-ejecutable-windows.ps1") -SkipTests
         $windowsFolder = Join-Path $temporaryRoot "GridScope-$version-Windows"
         New-Item -ItemType Directory -Path $windowsFolder -Force | Out-Null
         Copy-Item -LiteralPath $executable -Destination $windowsFolder

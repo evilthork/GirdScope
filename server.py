@@ -6,6 +6,7 @@ import csv
 import ctypes
 import difflib
 import hashlib
+import html
 import io
 import json
 import math
@@ -27,7 +28,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, unquote, urlencode, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -37,7 +38,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.7.1"
+APP_VERSION = "0.7.2"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -59,6 +60,7 @@ TRACK_MAP_CACHE_DIR = DEFAULT_DB_PATH.parent / "image-cache" / "track-maps"
 OAUTH_AUTHORIZE_URL = "https://oauth.iracing.com/oauth2/authorize"
 OAUTH_TOKEN_URL = "https://oauth.iracing.com/oauth2/token"
 OAUTH_PROFILE_URL = "https://oauth.iracing.com/oauth2/iracing/profile"
+RACEROOM_BASE_URL = "https://game.raceroom.com"
 
 
 TRACK_SLUG_ALIASES = {
@@ -216,8 +218,15 @@ def generic_series_svg(series_name: str, platform: str = "iracing") -> bytes:
         .replace('"', "&quot;")
     )
     is_assetto = platform == "assetto-corsa"
-    category = "ASSETTO CORSA" if is_assetto else "iRACING SERIES"
-    accent = "#d9b245" if is_assetto else "#ff7a2f"
+    is_raceroom = platform == "raceroom"
+    category = (
+        "ASSETTO CORSA"
+        if is_assetto
+        else "RACEROOM"
+        if is_raceroom
+        else "iRACING SERIES"
+    )
+    accent = "#d9b245" if is_assetto or is_raceroom else "#ff7a2f"
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="720" height="260" viewBox="0 0 720 260">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#282d33"/><stop offset="1" stop-color="#15181c"/></linearGradient></defs>
 <rect width="720" height="260" rx="28" fill="url(#g)"/>
@@ -231,11 +240,11 @@ def generic_series_svg(series_name: str, platform: str = "iracing") -> bytes:
 def resolve_series_logo(
     logo: str, series_name: str, platform: str = "iracing"
 ) -> tuple[bytes, str, str]:
-    if platform == "assetto-corsa":
+    if platform in {"assetto-corsa", "raceroom"}:
         return (
             generic_series_svg(series_name, platform),
             "image/svg+xml; charset=utf-8",
-            "generic-assetto-corsa",
+            f"generic-{platform}",
         )
     if not re.fullmatch(r"[A-Za-z0-9_.-]+\.(?:png|webp|jpg|jpeg)", logo):
         return (
@@ -1158,6 +1167,253 @@ def normalize_assetto_corsa_export(
     return normalized_events
 
 
+def windows_documents_folder() -> Path:
+    if os.name == "nt":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
+            ) as key:
+                value, _ = winreg.QueryValueEx(key, "Personal")
+                return Path(os.path.expandvars(str(value)))
+        except (OSError, ImportError):
+            pass
+    return Path.home() / "Documents"
+
+
+def suggested_raceroom_results_folder() -> Path:
+    return windows_documents_folder() / "My Games" / "SimBin" / (
+        "RaceRoom Racing Experience"
+    ) / "UserData" / "Log" / "Results"
+
+
+def raceroom_profile_slug(value: str) -> str:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return ""
+    parsed = urlparse(candidate if "://" in candidate else f"https://{candidate}")
+    if parsed.netloc.lower().endswith("raceroom.com"):
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) >= 3 and parts[0].lower() == "r3e" and parts[1].lower() == "users":
+            candidate = parts[2]
+    return unquote(candidate).strip().strip("/")
+
+
+def fetch_json_url(url: str, timeout: float = 20) -> Any:
+    request = Request(
+        url,
+        headers={"Accept": "application/json", "User-Agent": f"GridScope/{APP_VERSION}"},
+    )
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        if error.code == 404:
+            raise ValueError("No se ha encontrado ese perfil o resultado de RaceRoom") from error
+        raise ValueError(f"RaceRoom ha respondido con el error HTTP {error.code}") from error
+    except (URLError, TimeoutError) as error:
+        raise ValueError(
+            "No se ha podido conectar con RaceRoom. Comprueba Internet y vuelve a intentarlo."
+        ) from error
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("RaceRoom ha devuelto una respuesta que no se puede leer") from error
+
+
+def fetch_raceroom_profile(slug_or_url: str) -> dict[str, Any]:
+    slug = raceroom_profile_slug(slug_or_url)
+    if not slug or len(slug) > 120:
+        raise ValueError("Indica la URL pública de tu perfil de RaceRoom o su usuario")
+    url = f"{RACEROOM_BASE_URL}/r3e/users/{quote(slug)}/career"
+    request = Request(url, headers={"User-Agent": f"GridScope/{APP_VERSION}"})
+    try:
+        with urlopen(request, timeout=20) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except HTTPError as error:
+        if error.code == 404:
+            raise ValueError("No se ha encontrado ese perfil público de RaceRoom") from error
+        raise ValueError(f"RaceRoom ha respondido con el error HTTP {error.code}") from error
+    except (URLError, TimeoutError) as error:
+        raise ValueError(
+            "No se ha podido conectar con RaceRoom. Comprueba Internet y vuelve a intentarlo."
+        ) from error
+    profile_tag = re.search(r"<[^>]*\bprofile-page\b[^>]*>", body, re.IGNORECASE)
+    user_id_match = (
+        re.search(r'data-user-id=["\'](\d+)', profile_tag.group(0))
+        if profile_tag
+        else None
+    )
+    name_match = re.search(r"<h1[^>]*>(.*?)</h1>", body, re.IGNORECASE | re.DOTALL)
+    if not user_id_match:
+        raise ValueError("La página no parece un perfil público válido de RaceRoom")
+    display_name = slug
+    if name_match:
+        display_name = (
+            re.sub(r"<[^>]+>", "", html.unescape(name_match.group(1))).strip() or slug
+        )
+    return {
+        "slug": slug,
+        "userId": user_id_match.group(1),
+        "displayName": display_name,
+        "profileUrl": url,
+    }
+
+
+def normalize_raceroom_result(
+    payload: dict[str, Any], owner_user_id: str, minimum_distance: int
+) -> dict[str, Any]:
+    race_hash = str(payload.get("RaceHash") or "").strip()
+    race_rows = payload.get("RaceResult") or []
+    if not race_hash or not isinstance(race_rows, list) or not race_rows:
+        raise ValueError("El resultado de RaceRoom no contiene una carrera válida")
+    starters = [
+        row for row in race_rows if isinstance(row, dict) and row.get("Starter", True)
+    ] or [row for row in race_rows if isinstance(row, dict)]
+    def completed_laps(row: dict[str, Any]) -> int:
+        laps = row.get("Laps")
+        return len(laps) if isinstance(laps, list) else as_int(laps, 0)
+
+    leader_laps = max((completed_laps(row) for row in starters), default=0)
+    finish_timestamp = as_int(payload.get("RaceFinishTime"), 0)
+    event_time = (
+        datetime.fromtimestamp(finish_timestamp, timezone.utc)
+        if finish_timestamp > 0
+        else datetime.now(timezone.utc)
+    )
+    layout_record = payload.get("TrackLayoutId")
+    track_record = payload.get("TrackId")
+    track = (
+        payload.get("Track")
+        or payload.get("TrackName")
+        or (
+            track_record.get("Name")
+            if isinstance(track_record, dict)
+            else ""
+        )
+        or (
+            layout_record.get("Name")
+            if isinstance(layout_record, dict)
+            else ""
+        )
+        or "Circuito RaceRoom"
+    )
+    layout = (
+        payload.get("TrackLayout")
+        or payload.get("TrackLayoutName")
+        or (
+            layout_record.get("Name")
+            if isinstance(layout_record, dict)
+            else ""
+        )
+        or ""
+    )
+    if isinstance(track, dict):
+        track = track.get("Name") or track.get("name") or "Circuito RaceRoom"
+    if isinstance(layout, dict):
+        layout = layout.get("Name") or layout.get("name") or ""
+    class_names = sorted(
+        {
+            str(
+                (row.get("CarClass") or {}).get("Name")
+                if isinstance(row.get("CarClass"), dict)
+                else row.get("CarClassName") or ""
+            ).strip()
+            for row in starters
+        }
+        - {""}
+    )
+    series_name = (
+        f"RaceRoom Ranked · {' / '.join(class_names[:2])}"
+        if class_names
+        else "RaceRoom Ranked"
+    )
+    results: list[dict[str, Any]] = []
+    ordered = sorted(starters, key=lambda item: as_int(item.get("FinishPosition"), 9999))
+    for index, row in enumerate(ordered):
+        user_id = str(row.get("UserId") or row.get("Id") or row.get("Username") or index)
+        name = str(
+            row.get("FullName") or row.get("Username") or f"Piloto {index + 1}"
+        ).strip()
+        laps_complete = completed_laps(row)
+        lap_rows = row.get("Laps") if isinstance(row.get("Laps"), list) else []
+        valid_lap_times = [
+            as_int(lap.get("Time"), 0)
+            for lap in lap_rows
+            if isinstance(lap, dict)
+            and lap.get("Valid", True)
+            and as_int(lap.get("Time"), 0) > 0
+        ]
+        distance_percent = (
+            min(100.0, (laps_complete / leader_laps) * 100) if leader_laps else 100.0
+        )
+        class_info = row.get("CarClass") if isinstance(row.get("CarClass"), dict) else {}
+        eligible = distance_percent + 0.0001 >= minimum_distance
+        results.append(
+            {
+                "customerId": f"rr:{user_id}",
+                "name": name,
+                "finishPosition": max(1, as_int(row.get("FinishPosition"), index + 1)),
+                "startPosition": as_int(row.get("StartPosition"), 0) or None,
+                "incidents": max(0, as_int(row.get("Incidents"), 0)),
+                "lapsComplete": laps_complete,
+                "bestLapTime": (
+                    min(valid_lap_times) / 1000 if valid_lap_times else None
+                ),
+                "iratingChange": as_float(row.get("RatingChange")) or 0,
+                "safetyRatingChange": (
+                    float(row.get("ReputationChange"))
+                    if row.get("ReputationChange") is not None
+                    else None
+                ),
+                "status": (
+                    "Finalizada"
+                    if eligible
+                    else f"No puntuable (<{minimum_distance}% de distancia)"
+                ),
+                "classId": str(class_info.get("Id") or row.get("CarClassId") or ""),
+                "className": str(class_info.get("Name") or row.get("CarClassName") or ""),
+                "raceRoom": {
+                    "ratingBefore": row.get("RatingBefore"),
+                    "ratingAfter": row.get("RatingAfter"),
+                    "reputationBefore": row.get("ReputationBefore"),
+                    "reputationAfter": row.get("ReputationAfter"),
+                    "distancePercent": round(distance_percent, 2),
+                    "scoringEligible": eligible,
+                    "isOwner": user_id == str(owner_user_id),
+                },
+            }
+        )
+    return {
+        "platform": "raceroom",
+        "source": "raceroom-web",
+        "externalEventId": race_hash,
+        "seriesId": f"rr:{normalized_person_key(series_name)}",
+        "seasonId": f"rr:{normalized_person_key(series_name)}:{event_time.year}",
+        "seriesName": series_name,
+        "seasonName": str(event_time.year),
+        "seasonYear": event_time.year,
+        "seasonQuarter": 0,
+        "carName": " / ".join(class_names) or "Multiclase",
+        "setupType": "Ranked",
+        "totalWeeks": 53,
+        "raceWeek": event_time.isocalendar().week,
+        "startTime": event_time.isoformat(timespec="seconds"),
+        "track": str(track),
+        "layout": str(layout),
+        "splitNumber": None,
+        "splitTotal": None,
+        "strengthOfField": 0,
+        "fieldSize": len(results),
+        "official": True,
+        "results": results,
+        "raceRoom": {
+            "minimumDistance": minimum_distance,
+            "ownerUserId": owner_user_id,
+        },
+    }
+
+
 def normalize_iracing_export(payload: Any) -> dict[str, Any]:
     if isinstance(payload, list):
         entries: list[Any] = []
@@ -1708,6 +1964,57 @@ def extract_iracing_rich_data(payload: Any) -> dict[str, Any]:
         },
     }
     return {"event": event, "drivers": drivers}
+
+
+def extract_raceroom_rich_data(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {"event": {}, "drivers": {}}
+    drivers: dict[str, dict[str, Any]] = {}
+    for row in payload.get("RaceResult") or []:
+        if not isinstance(row, dict):
+            continue
+        user_id = str(row.get("UserId") or row.get("Id") or row.get("Username") or "")
+        if not user_id:
+            continue
+        lap_rows = row.get("Laps") if isinstance(row.get("Laps"), list) else []
+        valid_laps = [
+            as_int(lap.get("Time"), 0)
+            for lap in lap_rows
+            if isinstance(lap, dict)
+            and lap.get("Valid", True)
+            and as_int(lap.get("Time"), 0) > 0
+        ]
+        best_lap = min(valid_laps) / 1000 if valid_laps else None
+        drivers[f"rr:{user_id}"] = {
+            "oldIRating": as_float(row.get("RatingBefore")),
+            "newIRating": as_float(row.get("RatingAfter")),
+            "oldSafetyRating": as_float(row.get("ReputationBefore")),
+            "newSafetyRating": as_float(row.get("ReputationAfter")),
+            "averageLapTime": None,
+            "bestLapNumber": None,
+            "qualifyingLapTime": None,
+            "championshipPoints": None,
+            "intervalSeconds": None,
+            "lapsLed": 0,
+            "bestLapTime": best_lap,
+            "raceRoomDistancePercent": None,
+        }
+    return {
+        "event": {
+            "eventLapsComplete": max(
+                (
+                    len(row.get("Laps"))
+                    if isinstance(row.get("Laps"), list)
+                    else as_int(row.get("Laps"), 0)
+                    for row in payload.get("RaceResult") or []
+                    if isinstance(row, dict)
+                ),
+                default=0,
+            ),
+            "weather": {},
+        },
+        "drivers": drivers,
+    }
 
 
 def extract_assetto_corsa_rich_data(
@@ -2469,6 +2776,8 @@ class DataStore:
             status TEXT,
             class_id TEXT,
             class_name TEXT,
+            scoring_eligible INTEGER NOT NULL DEFAULT 1,
+            distance_percent REAL,
             UNIQUE (event_id, driver_id)
         );
 
@@ -2585,6 +2894,15 @@ class DataStore:
             ("owner_assetto_corsa_id", ""),
             ("owner_assetto_corsa_name", ""),
             ("owner_assetto_corsa_aliases", "[]"),
+            ("setup_raceroom_complete", "0"),
+            ("raceroom_profile_slug", ""),
+            ("raceroom_profile_url", ""),
+            ("owner_raceroom_id", ""),
+            ("owner_raceroom_name", ""),
+            ("raceroom_results_folder", str(suggested_raceroom_results_folder())),
+            ("auto_scan_raceroom", "0"),
+            ("raceroom_minimum_distance", "50"),
+            ("raceroom_last_sync", ""),
         ):
             connection.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
@@ -2632,6 +2950,17 @@ class DataStore:
         if "is_demo" not in driver_columns:
             connection.execute(
                 "ALTER TABLE drivers ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"
+            )
+        result_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(race_results)")
+        }
+        if "scoring_eligible" not in result_columns:
+            connection.execute(
+                "ALTER TABLE race_results ADD COLUMN scoring_eligible INTEGER NOT NULL DEFAULT 1"
+            )
+        if "distance_percent" not in result_columns:
+            connection.execute(
+                "ALTER TABLE race_results ADD COLUMN distance_percent REAL"
             )
         demo_ids = [str(driver[0]) for driver in DEMO_DRIVERS]
         placeholders = ",".join("?" for _ in demo_ids)
@@ -2755,6 +3084,15 @@ class DataStore:
                 ("owner_assetto_corsa_id", ""),
                 ("owner_assetto_corsa_name", ""),
                 ("owner_assetto_corsa_aliases", "[]"),
+                ("setup_raceroom_complete", "0"),
+                ("raceroom_profile_slug", ""),
+                ("raceroom_profile_url", ""),
+                ("owner_raceroom_id", ""),
+                ("owner_raceroom_name", ""),
+                ("raceroom_results_folder", str(suggested_raceroom_results_folder())),
+                ("auto_scan_raceroom", "0"),
+                ("raceroom_minimum_distance", "50"),
+                ("raceroom_last_sync", ""),
             ],
         )
 
@@ -2802,7 +3140,7 @@ class DataStore:
                     JOIN drivers d ON d.id = ld.driver_id
                     WHERE ld.league_id = l.id AND d.is_demo = 1
                     )
-                    OR l.platform = 'assetto-corsa'
+                    OR l.platform IN ('assetto-corsa', 'raceroom')
                   )
                 ORDER BY l.active DESC, l.id
                 LIMIT 1
@@ -2989,6 +3327,8 @@ class DataStore:
             owner_iracing_id = (
                 settings.get("owner_assetto_corsa_id", "")
                 if platform == "assetto-corsa"
+                else settings.get("owner_raceroom_id", "")
+                if platform == "raceroom"
                 else settings.get("owner_iracing_id", "")
             )
             driver_rows = connection.execute(
@@ -3139,6 +3479,8 @@ class DataStore:
                 "ownerDisplayName": (
                     settings.get("owner_assetto_corsa_name", "")
                     if platform == "assetto-corsa"
+                    else settings.get("owner_raceroom_name", "")
+                    if platform == "raceroom"
                     else settings.get("owner_iracing_id", "")
                 ),
                 "ownerAliases": (
@@ -3158,6 +3500,15 @@ class DataStore:
                     "auto_scan_assetto_corsa", "0"
                 )
                 == "1",
+                "raceRoomProfileUrl": settings.get("raceroom_profile_url", ""),
+                "raceRoomResultsFolder": settings.get(
+                    "raceroom_results_folder", str(suggested_raceroom_results_folder())
+                ),
+                "autoScanRaceRoom": settings.get("auto_scan_raceroom", "0") == "1",
+                "raceRoomMinimumDistance": int(
+                    settings.get("raceroom_minimum_distance", "50")
+                ),
+                "raceRoomLastSync": settings.get("raceroom_last_sync", ""),
             },
             "oauth": oauth,
             "demoMode": bool(demo_count),
@@ -3471,8 +3822,8 @@ class DataStore:
                     INSERT INTO race_results
                         (event_id, driver_id, finish_position, start_position, incidents,
                          laps_complete, best_lap_time, irating_change, safety_rating_change,
-                         status, class_id, class_name)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         status, class_id, class_name, scoring_eligible, distance_percent)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         event_id,
@@ -3487,6 +3838,10 @@ class DataStore:
                         result["status"],
                         result["classId"],
                         result["className"],
+                        1
+                        if result.get("raceRoom", {}).get("scoringEligible", True)
+                        else 0,
+                        result.get("raceRoom", {}).get("distancePercent"),
                     ),
                 )
 
@@ -3714,6 +4069,22 @@ class DataStore:
                     or suggested_assetto_owner,
                     "ownerAliases": effective_assetto_aliases,
                 },
+                "raceroom": {
+                    "configured": settings.get("setup_raceroom_complete", "0") == "1",
+                    "raceCount": counts.get("raceroom", 0),
+                    "folder": settings.get(
+                        "raceroom_results_folder",
+                        str(suggested_raceroom_results_folder()),
+                    ),
+                    "suggestedFolder": str(suggested_raceroom_results_folder()),
+                    "suggestedFolderExists": suggested_raceroom_results_folder().is_dir(),
+                    "autoScan": settings.get("auto_scan_raceroom", "0") == "1",
+                    "ownerIdentity": settings.get("raceroom_profile_url", "")
+                    or settings.get("raceroom_profile_slug", ""),
+                    "minimumDistance": int(
+                        settings.get("raceroom_minimum_distance", "50")
+                    ),
+                },
             },
         }
 
@@ -3731,7 +4102,7 @@ class DataStore:
 
     def select_simulator(self, simulator: str) -> dict[str, Any]:
         platform = str(simulator or "").strip().lower()
-        if platform not in {"iracing", "assetto-corsa"}:
+        if platform not in {"iracing", "assetto-corsa", "raceroom"}:
             raise ValueError("El simulador seleccionado no es válido")
         with self.connect() as connection:
             connection.execute(
@@ -3741,21 +4112,19 @@ class DataStore:
                 """,
                 (platform,),
             )
-            setup_key = (
-                "setup_assetto_corsa_complete"
-                if platform == "assetto-corsa"
-                else "setup_iracing_complete"
-            )
+            setup_key = {
+                "assetto-corsa": "setup_assetto_corsa_complete",
+                "raceroom": "setup_raceroom_complete",
+            }.get(platform, "setup_iracing_complete")
             configured_row = connection.execute(
                 "SELECT value FROM settings WHERE key = ?", (setup_key,)
             ).fetchone()
             configured = bool(configured_row and configured_row["value"] == "1")
             if configured:
-                owner_key = (
-                    "owner_assetto_corsa_id"
-                    if platform == "assetto-corsa"
-                    else "owner_iracing_id"
-                )
+                owner_key = {
+                    "assetto-corsa": "owner_assetto_corsa_id",
+                    "raceroom": "owner_raceroom_id",
+                }.get(platform, "owner_iracing_id")
                 owner_row = connection.execute(
                     "SELECT value FROM settings WHERE key = ?", (owner_key,)
                 ).fetchone()
@@ -4149,16 +4518,16 @@ class DataStore:
             owner_identity, values.get("ownerAliases")
         )
         auto_scan = bool(values.get("autoScan", True))
-        if platform not in {"iracing", "assetto-corsa"}:
+        if platform not in {"iracing", "assetto-corsa", "raceroom"}:
             raise ValueError("El simulador seleccionado no es válido")
         candidate = Path(folder_value).expanduser()
         if not candidate.is_absolute():
             raise ValueError("La carpeta debe indicarse con una ruta completa")
         try:
-            resolved = candidate.resolve(strict=True)
+            resolved = candidate.resolve(strict=platform != "raceroom")
         except OSError as error:
             raise ValueError("La carpeta indicada no existe") from error
-        if not resolved.is_dir():
+        if platform != "raceroom" and not resolved.is_dir():
             raise ValueError("La ruta indicada no es una carpeta")
 
         if platform == "iracing":
@@ -4171,7 +4540,7 @@ class DataStore:
                 ("setup_iracing_complete", "1"),
                 ("selected_simulator", platform),
             )
-        else:
+        elif platform == "assetto-corsa":
             if not owner_aliases:
                 raise ValueError("Indica el nombre con el que apareces en Assetto Corsa")
             owner_identity = owner_aliases[0]
@@ -4196,6 +4565,26 @@ class DataStore:
                     json.dumps(owner_aliases, ensure_ascii=False),
                 ),
                 ("setup_assetto_corsa_complete", "1"),
+                ("selected_simulator", platform),
+            )
+        else:
+            profile = fetch_raceroom_profile(owner_identity)
+            owner_identity = profile["profileUrl"]
+            try:
+                minimum_distance = int(values.get("minimumDistance", 50))
+            except (TypeError, ValueError) as error:
+                raise ValueError("La distancia mínima no es válida") from error
+            if not 10 <= minimum_distance <= 100:
+                raise ValueError("La distancia mínima debe estar entre el 10% y el 100%")
+            setting_values = (
+                ("raceroom_profile_slug", profile["slug"]),
+                ("raceroom_profile_url", profile["profileUrl"]),
+                ("owner_raceroom_id", f"rr:{profile['userId']}"),
+                ("owner_raceroom_name", profile["displayName"]),
+                ("raceroom_results_folder", str(resolved)),
+                ("auto_scan_raceroom", "1" if auto_scan else "0"),
+                ("raceroom_minimum_distance", str(minimum_distance)),
+                ("setup_raceroom_complete", "1"),
                 ("selected_simulator", platform),
             )
 
@@ -4235,15 +4624,21 @@ class DataStore:
                     VALUES (?, ?, ?, ?, ?, 53, 0, 0, ?, ?, ?, ?, 0, ?)
                     """,
                     (
-                        "Assetto Corsa" if platform == "assetto-corsa" else "iRacing",
+                        "Assetto Corsa"
+                        if platform == "assetto-corsa"
+                        else "RaceRoom"
+                        if platform == "raceroom"
+                        else "iRacing",
                         "Historial de Assetto Corsa"
                         if platform == "assetto-corsa"
+                        else "RaceRoom Ranked"
+                        if platform == "raceroom"
                         else "Serie iRacing",
                         str(year)
                         if platform == "assetto-corsa"
                         else f"{year} Season 1",
                         "Sin carreras importadas",
-                        "Local",
+                        "Ranked" if platform == "raceroom" else "Local",
                         utc_now(),
                         f"{platform}:pending",
                         f"{platform}:pending:{year}",
@@ -4267,7 +4662,155 @@ class DataStore:
             "ownerIdentity": owner_identity,
             "ownerAliases": owner_aliases if platform == "assetto-corsa" else [],
             "autoScan": auto_scan,
+            "minimumDistance": (
+                minimum_distance if platform == "raceroom" else None
+            ),
             "configured": True,
+        }
+
+    def sync_raceroom_history(self, maximum_new: int = 25) -> dict[str, Any]:
+        maximum_new = max(1, min(100, as_int(maximum_new, 25)))
+        with self.connect() as connection:
+            settings = {
+                row["key"]: row["value"]
+                for row in connection.execute(
+                    """
+                    SELECT key, value FROM settings
+                    WHERE key IN (
+                        'raceroom_profile_slug', 'owner_raceroom_id',
+                        'raceroom_minimum_distance'
+                    )
+                    """
+                ).fetchall()
+            }
+            known_hashes = {
+                str(row["external_event_id"])
+                for row in connection.execute(
+                    "SELECT external_event_id FROM imported_files WHERE source = 'raceroom-web'"
+                ).fetchall()
+            }
+        slug = settings.get("raceroom_profile_slug", "").strip()
+        owner_id = settings.get("owner_raceroom_id", "").removeprefix("rr:")
+        if not slug or not owner_id:
+            raise ValueError("Configura primero tu perfil público de RaceRoom")
+        minimum_distance = max(
+            10, min(100, as_int(settings.get("raceroom_minimum_distance"), 50))
+        )
+
+        summaries: list[dict[str, Any]] = []
+        page = -1
+        total_entries = 0
+        while len(summaries) < 5000:
+            payload = fetch_json_url(
+                f"{RACEROOM_BASE_URL}/r3e/users/{quote(slug)}/career"
+                f"?CurrentPage={page}&PageSize=100&json"
+            )
+            try:
+                payload = payload["context"]["c"]["raceList"][
+                    "GetUserMpRatingProgressResult"
+                ]
+            except (KeyError, TypeError):
+                pass
+            entries = payload.get("Entries") or payload.get("entries") or []
+            total_entries = as_int(
+                payload.get("TotalEntries", payload.get("totalEntries")), len(entries)
+            )
+            if not isinstance(entries, list) or not entries:
+                break
+            summaries.extend(entry for entry in entries if isinstance(entry, dict))
+            if len(summaries) >= total_entries or len(entries) < 100:
+                break
+            page -= 1
+
+        summaries = list(
+            {
+                str(summary.get("RaceHash") or ""): summary
+                for summary in summaries
+                if str(summary.get("RaceHash") or "").strip()
+            }.values()
+        )
+        pending = [
+            summary
+            for summary in summaries
+            if str(summary.get("RaceHash") or "").strip() not in known_hashes
+        ]
+        pending.sort(
+            key=lambda item: as_int(item.get("RaceFinishTime"), 0), reverse=True
+        )
+        imported = 0
+        duplicates = 0
+        errors: list[str] = []
+        for summary in pending[:maximum_new]:
+            race_hash = str(summary.get("RaceHash") or "").strip()
+            if not race_hash:
+                continue
+            try:
+                detail_response = fetch_json_url(
+                    f"{RACEROOM_BASE_URL}/multiplayer/results/{quote(race_hash)}"
+                )
+                detail = (
+                    detail_response.get("GetMpRaceResultResult")
+                    if isinstance(detail_response, dict)
+                    else None
+                )
+                if not isinstance(detail, dict):
+                    detail = detail_response
+                if not isinstance(detail, dict):
+                    raise ValueError("RaceRoom no ha devuelto el detalle esperado")
+                detail = {**summary, **detail, "RaceHash": race_hash}
+                normalized = normalize_raceroom_result(
+                    detail, owner_id, minimum_distance
+                )
+                result = self._import_normalized_result(
+                    f"raceroom-{race_hash}.json",
+                    detail,
+                    normalized,
+                    include_all_drivers=True,
+                    replace_demo=True,
+                )
+                if result.get("duplicate"):
+                    duplicates += 1
+                else:
+                    imported += 1
+            except (ValueError, TypeError, KeyError) as error:
+                errors.append(f"{race_hash}: {error}")
+
+        remaining = max(0, len(pending) - min(len(pending), maximum_new))
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO settings (key, value) VALUES ('raceroom_last_sync', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (now,),
+            )
+            latest = connection.execute(
+                """
+                SELECT league.id
+                FROM leagues league
+                JOIN race_events event ON event.league_id = league.id
+                WHERE league.platform = 'raceroom'
+                ORDER BY event.start_time DESC, event.id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            if latest:
+                connection.execute("UPDATE leagues SET active = 0")
+                connection.execute(
+                    "UPDATE leagues SET active = 1 WHERE id = ?", (latest["id"],)
+                )
+        return {
+            "profile": slug,
+            "available": total_entries,
+            "reviewed": len(summaries),
+            "imported": imported,
+            "duplicates": duplicates,
+            "remaining": remaining,
+            "minimumDistance": minimum_distance,
+            "lastSync": now,
+            "errors": errors[:10],
+            "complete": remaining == 0,
         }
 
     def scan_assetto_corsa_folder(self) -> dict[str, Any]:
@@ -4643,6 +5186,7 @@ class DataStore:
                 FROM race_results rr
                 JOIN race_events re ON re.id = rr.event_id
                 WHERE re.league_id = ? AND rr.driver_id = ?
+                  AND rr.scoring_eligible = 1
                 ORDER BY re.race_week, re.start_time
                 """,
                 (league_id, driver["driver_id"]),
@@ -4730,6 +5274,7 @@ class DataStore:
                 JOIN league_drivers ld
                   ON ld.driver_id = rr.driver_id AND ld.league_id = re.league_id
                 WHERE re.league_id = ? AND re.race_week = ?
+                  AND rr.scoring_eligible = 1
                 """,
                 (league_id, event["race_week"]),
             ).fetchone()
@@ -4760,11 +5305,10 @@ class DataStore:
         ).fetchone()
         if not league:
             raise RuntimeError("No hay una liga activa")
-        owner_key = (
-            "owner_assetto_corsa_id"
-            if league["platform"] == "assetto-corsa"
-            else "owner_iracing_id"
-        )
+        owner_key = {
+            "assetto-corsa": "owner_assetto_corsa_id",
+            "raceroom": "owner_raceroom_id",
+        }.get(str(league["platform"]), "owner_iracing_id")
         owner = connection.execute(
             "SELECT value FROM settings WHERE key = ?",
             (owner_key,),
@@ -4852,7 +5396,8 @@ class DataStore:
                 SELECT d.id AS driver_db_id, d.iracing_id, d.name, d.initials, d.color,
                        rr.finish_position, rr.start_position, rr.incidents,
                        rr.laps_complete, rr.best_lap_time, rr.irating_change,
-                       rr.safety_rating_change, rr.status, rr.class_id, rr.class_name
+                       rr.safety_rating_change, rr.status, rr.class_id, rr.class_name,
+                       rr.scoring_eligible, rr.distance_percent
                 FROM race_results rr
                 JOIN drivers d ON d.id = rr.driver_id
                 WHERE rr.event_id = ?
@@ -4861,7 +5406,7 @@ class DataStore:
                 (event_id,),
             ).fetchall()
             recurrent_rows = []
-            if event["platform"] in {"assetto-corsa", "iracing"}:
+            if event["platform"] in {"assetto-corsa", "iracing", "raceroom"}:
                 recurrent_rows = connection.execute(
                     """
                     WITH current_drivers AS (
@@ -4927,13 +5472,14 @@ class DataStore:
         if imported:
             try:
                 raw_payload = json.loads(imported["raw_json"])
-                rich = (
-                    extract_assetto_corsa_rich_data(
+                if event["platform"] == "assetto-corsa":
+                    rich = extract_assetto_corsa_rich_data(
                         raw_payload, event["external_event_id"]
                     )
-                    if event["platform"] == "assetto-corsa"
-                    else extract_iracing_rich_data(raw_payload)
-                )
+                elif event["platform"] == "raceroom":
+                    rich = extract_raceroom_rich_data(raw_payload)
+                else:
+                    rich = extract_iracing_rich_data(raw_payload)
             except (TypeError, json.JSONDecodeError):
                 rich = {"event": {}, "drivers": {}}
 
@@ -4979,6 +5525,8 @@ class DataStore:
                 "status": row["status"],
                 "classId": row["class_id"],
                 "className": row["class_name"],
+                "scoringEligible": bool(row["scoring_eligible"]),
+                "distancePercent": row["distance_percent"],
                 "countryCode": "",
                 "division": "",
                 "lapsLed": 0,
@@ -6395,6 +6943,7 @@ class DataStore:
                     result
                     for result in event["detail"]["results"]
                     if result["iracingId"] in participant_ids
+                    and result.get("scoringEligible", True)
                 ]
                 if len(present) < 2:
                     continue
@@ -6881,11 +7430,10 @@ class DataStore:
                 "SELECT platform FROM leagues WHERE active = 1 ORDER BY id LIMIT 1"
             ).fetchone()
             platform = str(active["platform"] if active else "iracing")
-            owner_key = (
-                "owner_assetto_corsa_id"
-                if platform == "assetto-corsa"
-                else "owner_iracing_id"
-            )
+            owner_key = {
+                "assetto-corsa": "owner_assetto_corsa_id",
+                "raceroom": "owner_raceroom_id",
+            }.get(platform, "owner_iracing_id")
             owner_row = connection.execute(
                 "SELECT value FROM settings WHERE key = ?", (owner_key,)
             ).fetchone()
@@ -7082,11 +7630,10 @@ class DataStore:
             ).fetchone()
             platform = str(active["platform"] if active else "iracing")
             if not owner_identity:
-                owner_key = (
-                    "owner_assetto_corsa_name"
-                    if platform == "assetto-corsa"
-                    else "owner_iracing_id"
-                )
+                owner_key = {
+                    "assetto-corsa": "owner_assetto_corsa_name",
+                    "raceroom": "owner_raceroom_name",
+                }.get(platform, "owner_iracing_id")
                 current_owner = connection.execute(
                     "SELECT value FROM settings WHERE key = ?",
                     (owner_key,),
@@ -7125,6 +7672,14 @@ class DataStore:
                     ),
                 )
                 owner_driver_id = assetto_driver_id(owner_identity)
+            elif platform == "raceroom":
+                owner_id_row = connection.execute(
+                    "SELECT value FROM settings WHERE key = 'owner_raceroom_id'"
+                ).fetchone()
+                owner_driver_id = str(owner_id_row["value"] if owner_id_row else "")
+                if not owner_driver_id:
+                    raise ValueError("Configura primero tu perfil de RaceRoom")
+                owner_values = (("owner_raceroom_name", owner_identity),)
             else:
                 if not owner_identity.isdigit() or not 3 <= len(owner_identity) <= 12:
                     raise ValueError("El ID del piloto de referencia no es válido")
@@ -7605,7 +8160,7 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
                     not track_name
                     or len(track_name) > 180
                     or len(layout) > 180
-                    or platform not in {"iracing", "assetto-corsa"}
+                    or platform not in {"iracing", "assetto-corsa", "raceroom"}
                 ):
                     raise ValueError("El circuito indicado no es válido")
                 content, content_type, image_source = resolve_track_image(
@@ -7627,11 +8182,13 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
                 query = parse_qs(parsed_url.query)
                 logo = query.get("logo", [""])[0].strip()
                 platform = query.get("platform", ["iracing"])[0].strip().lower()
-                if platform not in {"iracing", "assetto-corsa"}:
+                if platform not in {"iracing", "assetto-corsa", "raceroom"}:
                     platform = "iracing"
                 fallback_name = (
                     "Serie de Assetto Corsa"
                     if platform == "assetto-corsa"
+                    else "Serie de RaceRoom"
+                    if platform == "raceroom"
                     else "Serie iRacing"
                 )
                 series_name = query.get("name", [fallback_name])[0].strip()
@@ -7657,7 +8214,7 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
                     track_id < 0
                     or len(track_name) > 180
                     or len(layout) > 180
-                    or platform not in {"iracing", "assetto-corsa"}
+                    or platform not in {"iracing", "assetto-corsa", "raceroom"}
                 ):
                     raise ValueError("El trazado indicado no es válido")
                 content, content_type, image_source = resolve_track_map(
@@ -7802,6 +8359,14 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
                 return
             if path == "/api/assetto-corsa/folder/scan":
                 self.send_json(self.store.scan_assetto_corsa_folder())
+                return
+            if path == "/api/raceroom/sync":
+                payload = self.read_json()
+                self.send_json(
+                    self.store.sync_raceroom_history(
+                        as_int(payload.get("maximumNew"), 25)
+                    )
+                )
                 return
             if path == "/api/telemetry/folder/scan":
                 self.send_json(self.store.scan_telemetry_folder())

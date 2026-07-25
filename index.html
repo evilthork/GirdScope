@@ -53,6 +53,16 @@
             </span>
             <span class="simulator-choice-action">Entrar <b>→</b></span>
           </button>
+          <button class="simulator-choice raceroom-choice" type="button" data-select-simulator="raceroom">
+            <span class="simulator-choice-number">03</span>
+            <span class="simulator-choice-mark">RR</span>
+            <span class="simulator-choice-copy">
+              <small>Historial ranked público</small>
+              <strong>RaceRoom</strong>
+              <em>Rating, reputación, incidentes, posiciones y rivales de todas tus carreras ranked.</em>
+            </span>
+            <span class="simulator-choice-action">Entrar <b>→</b></span>
+          </button>
         </div>
         <div class="gateway-privacy">
           <span></span>
@@ -90,6 +100,11 @@
               <span>Carpeta de instalación de Assetto Corsa</span>
               <input id="setupInstallFolder" type="text" autocomplete="off" />
               <small>Se utiliza para mostrar las imágenes y los trazados originales, incluidos los circuitos mod.</small>
+            </label>
+            <label id="setupMinimumDistanceField" hidden>
+              <span>Distancia mínima para puntuar</span>
+              <div class="input-suffix"><input id="setupMinimumDistance" type="number" min="10" max="100" value="50" /><span>%</span></div>
+              <small>El piloto aparece como coincidencia desde que toma la salida, pero solo puntúa si completa este porcentaje de las vueltas del ganador.</small>
             </label>
             <label class="gateway-toggle">
               <input id="setupAutoScan" type="checkbox" checked />
@@ -606,9 +621,34 @@
               </ol>
               <p class="oauth-notice">En Content Manager aumenta <strong>Keep results of the last … sessions</strong> para conservar un histórico más largo.</p>
             </section>
+            <section class="panel settings-card" data-simulator-only="raceroom">
+              <div class="settings-icon"><strong>RR</strong></div>
+              <h3>Historial ranked de RaceRoom</h3>
+              <p class="settings-card-intro">GridScope lee el historial público asociado a tu perfil. No solicita ni guarda tu contraseña.</p>
+              <label>Perfil público o usuario<input id="raceRoomProfileSetting" type="text" autocomplete="off" placeholder="https://game.raceroom.com/r3e/users/TuUsuario/career" /><small>Puedes pegar la URL completa del apartado Career o solamente tu nombre de usuario.</small></label>
+              <label>Carpeta de resultados locales<input id="raceRoomFolderSetting" type="text" autocomplete="off" placeholder="C:\Users\usuario\Documents\My Games\SimBin\RaceRoom Racing Experience\UserData\Log\Results" /><small>Se reserva para carreras no ranked guardadas por el juego. El historial ranked se obtiene del perfil web.</small></label>
+              <label>Distancia mínima para puntuar<div class="input-suffix"><input id="raceRoomMinimumDistanceSetting" type="number" min="10" max="100" value="50" /><span>%</span></div><small>Se comparan las vueltas del piloto con las del ganador. Por ejemplo, 6 vueltas de 10 equivalen al 60% y sí puntúan con un mínimo del 50%.</small></label>
+              <label class="toggle-setting"><input id="autoScanRaceRoomSetting" type="checkbox" /><span><strong>Actualizar automáticamente</strong><small>Comprueba si existen carreras ranked nuevas y omite las que ya estén guardadas.</small></span></label>
+              <div class="oauth-actions">
+                <button class="primary-button" type="button" id="saveRaceRoomSettingsButton">Guardar configuración</button>
+                <button class="secondary-button" type="button" id="syncRaceRoomButton">Sincronizar 25 carreras</button>
+              </div>
+              <p class="oauth-notice" id="raceRoomSyncStatus">La primera sincronización se realiza por lotes de 25. Puedes repetirla y continuará donde se quedó.</p>
+            </section>
+            <section class="panel settings-card" data-simulator-only="raceroom">
+              <div class="settings-icon guide-icon"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm3 0v16m3-12h5m-5 4h5" /></svg></div>
+              <h3>Qué se importa y cómo puntúa</h3>
+              <ol class="assetto-guide-list">
+                <li><span>1</span><p><strong>Historial ranked</strong><small>Se importan circuito, parrilla, posiciones, vueltas, incidentes, Rating y Reputation.</small></p></li>
+                <li><span>2</span><p><strong>Coincidir no significa puntuar</strong><small>Quien toma la salida aparece como rival. Si no alcanza la distancia mínima, queda marcado como no puntuable.</small></p></li>
+                <li><span>3</span><p><strong>Sincronización reanudable</strong><small>Cada carrera se guarda en SQLite; al repetir la búsqueda solo se procesan las pendientes.</small></p></li>
+                <li><span>4</span><p><strong>No ranked</strong><small>La carpeta local queda preparada para incorporar esos resultados en la siguiente fase.</small></p></li>
+              </ol>
+              <p class="oauth-notice">El historial web es público, pero no es una API oficial documentada. GridScope usa peticiones moderadas y nunca necesita tus credenciales.</p>
+            </section>
             <section class="panel settings-card">
               <div class="settings-icon"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8m-1-5h20v5H2V3Zm8 9h4" /></svg></div>
-              <h3>Datos locales</h3>
+              <h3 data-generic-data-title>Datos locales</h3>
               <div class="data-row"><span>Temporadas guardadas</span><strong id="archiveCount">0</strong></div>
               <div class="data-row"><span>Carreras almacenadas</span><strong id="storedRaceCount">18</strong></div>
               <div class="data-row"><span>Archivos importados</span><strong id="importedFileCount">0</strong></div>

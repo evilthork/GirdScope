@@ -1434,7 +1434,7 @@ dialog::backdrop { background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
 }
 .simulator-choice-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 15px;
   margin-top: 48px;
 }
@@ -1472,6 +1472,7 @@ dialog::backdrop { background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
 }
 .iracing-choice { --choice-accent: #ff7a2f; --choice-glow: rgba(255,122,47,.2); }
 .assetto-choice { --choice-accent: #4e91ff; --choice-glow: rgba(78,145,255,.19); }
+.raceroom-choice { --choice-accent: #e8c24f; --choice-glow: rgba(232,194,79,.18); }
 .simulator-choice-number {
   position: absolute;
   top: 21px;

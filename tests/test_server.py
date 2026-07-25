@@ -20,6 +20,7 @@ from server import (
     generic_track_svg,
     normalize_assetto_corsa_export,
     normalize_iracing_export,
+    normalize_raceroom_result,
     official_track_slug,
     read_ibt_metadata,
     resolve_assetto_track_asset,
@@ -1023,6 +1024,64 @@ class DataStoreTests(unittest.TestCase):
             self.store.save_import_folder(
                 str(self.root / "missing-folder"), auto_scan=False
             )
+
+    def test_raceroom_result_keeps_coincidences_and_marks_short_races(self):
+        payload = {
+            "RaceHash": "abc123",
+            "RaceFinishTime": 1_720_000_000,
+            "TrackId": {"Id": 1, "Name": "RaceRoom Raceway"},
+            "TrackLayoutId": {"Id": 2, "Name": "Grand Prix"},
+            "RaceResult": [
+                {
+                    "UserId": 10,
+                    "FullName": "Piloto referencia",
+                    "FinishPosition": 1,
+                    "StartPosition": 2,
+                    "Laps": [
+                        {"Time": 90_000, "Valid": True} for _ in range(10)
+                    ],
+                    "Incidents": 1,
+                    "Starter": True,
+                    "RatingBefore": 1500.5,
+                    "RatingAfter": 1512.75,
+                    "RatingChange": 12.25,
+                    "ReputationBefore": 80.0,
+                    "ReputationAfter": 81.5,
+                    "ReputationChange": 1.5,
+                    "CarClass": {"Id": 3, "Name": "Touring Cars"},
+                },
+                {
+                    "UserId": 20,
+                    "FullName": "Rival retirada",
+                    "FinishPosition": 2,
+                    "StartPosition": 1,
+                    "Laps": [
+                        {"Time": 91_000, "Valid": True} for _ in range(4)
+                    ],
+                    "Incidents": 3,
+                    "Starter": True,
+                    "RatingChange": -4.5,
+                    "ReputationChange": -1.0,
+                    "CarClass": {"Id": 3, "Name": "Touring Cars"},
+                },
+            ],
+        }
+
+        normalized = normalize_raceroom_result(payload, "10", 50)
+        result = self.store._import_normalized_result(
+            "raceroom-abc123.json", payload, normalized
+        )
+
+        self.assertFalse(result["duplicate"])
+        self.assertEqual(normalized["platform"], "raceroom")
+        self.assertEqual(normalized["results"][1]["raceRoom"]["distancePercent"], 40)
+        self.assertFalse(normalized["results"][1]["raceRoom"]["scoringEligible"])
+        with self.store.connect() as connection:
+            rows = connection.execute(
+                "SELECT scoring_eligible, distance_percent FROM race_results ORDER BY finish_position"
+            ).fetchall()
+        self.assertEqual([row["scoring_eligible"] for row in rows], [1, 0])
+        self.assertEqual(rows[1]["distance_percent"], 40)
 
 
 if __name__ == "__main__":

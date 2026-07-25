@@ -2,6 +2,19 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.7.2] - 2026-07-25
+
+- RaceRoom se incorpora como tercer simulador independiente.
+- Configuración mediante URL o usuario del perfil público, sin contraseña.
+- Sincronización ranked progresiva y reanudable en lotes de 25 carreras.
+- Importación de posiciones, vueltas, incidentes, Rating y Reputation.
+- Distancia mínima configurable: el piloto conserva la coincidencia desde que
+  toma la salida, pero el resultado solo puntúa si alcanza el porcentaje
+  exigido respecto a las vueltas del ganador.
+- Carpeta local de resultados preparada para la futura importación de carreras
+  no ranked.
+- Textos, ayudas y etiquetas específicas de RaceRoom.
+
 ## [0.7.1] - 2026-07-25
 
 - Se aclara que la importación de iRacing utiliza archivos JSON mientras la

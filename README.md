@@ -1,11 +1,11 @@
 # GridScope
 
-GridScope es una aplicación local de estadísticas para **iRacing** y
-**Assetto Corsa original**. Organiza resultados, temporadas, rivales,
+GridScope es una aplicación local de estadísticas para **iRacing**,
+**Assetto Corsa original** y **RaceRoom**. Organiza resultados, temporadas, rivales,
 comparativas y Campeonatos GridScope sin subir el historial del usuario a
 ningún servidor.
 
-> Versión actual: **0.7.1 Beta**
+> Versión actual: **0.7.2 Beta**
 
 ## Funciones principales
 
@@ -13,6 +13,8 @@ ningún servidor.
   se añadirá en una versión posterior cuando iRacing vuelva a permitir crear
   nuevos clientes OAuth.
 - Lectura automática del historial de Content Manager para Assetto Corsa.
+- Sincronización progresiva del historial ranked público de RaceRoom, con
+  Rating, Reputation, incidentes y distancia completada.
 - Separación completa de los datos de cada simulador.
 - Resúmenes por temporada, semana, carrera, circuito y piloto.
 - Comparativas frente a rivales recurrentes.
@@ -45,7 +47,7 @@ continúan utilizando esa base para no perder su historial.
 
 ### Versión preparada
 
-1. Descarga `GridScope-0.7.1-Windows.zip` desde GitHub Releases.
+1. Descarga `GridScope-0.7.2-Windows.zip` desde GitHub Releases.
 2. Descomprime el archivo.
 3. Ejecuta `GridScope.exe`.
 4. Mantén abierta la ventana del servidor mientras utilizas la aplicación.
@@ -96,6 +98,19 @@ de Content Manager. Su ubicación habitual es:
 La carpeta correcta contiene archivos `.json` generados al terminar sesiones.
 GridScope reconoce prácticas y clasificaciones, pero solo las carreras puntúan.
 En sesiones locales excluye los rivales identificados como IA.
+
+### RaceRoom
+
+Pega la URL pública de tu perfil o tu nombre de usuario de RaceRoom. GridScope
+consulta el apartado Career sin pedir contraseña y guarda el historial ranked
+en lotes de 25 carreras. Si la operación se interrumpe, la siguiente
+sincronización omite lo ya guardado y continúa con lo pendiente.
+
+Todos los pilotos que toman la salida cuentan como coincidencia. Para puntuar
+en clasificaciones y duelos deben completar el porcentaje mínimo configurable
+de las vueltas del ganador; el valor inicial recomendado es el 50%. La carpeta
+local de resultados queda configurada para incorporar carreras no ranked en una
+fase posterior.
 
 ## Campeonatos GridScope
 

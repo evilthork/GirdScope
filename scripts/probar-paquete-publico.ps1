@@ -50,6 +50,9 @@ try {
     if (-not $health) {
         throw "El ejecutable no ha iniciado en el tiempo esperado."
     }
+    if ($health.version -ne $version) {
+        throw "El ejecutable informa la versión $($health.version), pero el paquete es $version."
+    }
 
     $bootstrap = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/bootstrap" -TimeoutSec 10
     $databasePath = Join-Path $profileRoot "GridScope\data\apex-local.db"
@@ -58,6 +61,7 @@ try {
         Estado = $health.status
         IRacingConfigurado = $bootstrap.simulators.iracing.configured
         AssettoCorsaConfigurado = $bootstrap.simulators.'assetto-corsa'.configured
+        RaceRoomConfigurado = $bootstrap.simulators.raceroom.configured
         IdentidadIRacingVacia = [string]::IsNullOrWhiteSpace(
             $bootstrap.simulators.iracing.ownerIdentity
         )
