@@ -1,5 +1,6 @@
 import csv
 import copy
+import hashlib
 import io
 import json
 import shutil
@@ -25,6 +26,8 @@ from server import (
     official_track_slug,
     read_ibt_metadata,
     resolve_assetto_track_asset,
+    download_update_package,
+    update_status_from_releases,
 )
 
 
@@ -77,6 +80,103 @@ class FakeProtector:
         return bytes(value).decode("utf-8").removeprefix("protected:")
 
 
+class UpdateSystemTests(unittest.TestCase):
+    def release(
+        self,
+        version: str,
+        *,
+        prerelease: bool,
+        content: bytes = b"package",
+        asset_url: str | None = None,
+    ) -> dict:
+        asset_name = f"GridScope-{version}-Windows.zip"
+        return {
+            "tag_name": f"v{version}",
+            "name": f"GridScope {version}",
+            "body": "Notas de prueba",
+            "draft": False,
+            "prerelease": prerelease,
+            "html_url": f"https://github.com/evilthork/GirdScope/releases/tag/v{version}",
+            "published_at": "2026-07-26T12:00:00Z",
+            "assets": [
+                {
+                    "name": asset_name,
+                    "browser_download_url": asset_url
+                    or (
+                        "https://github.com/evilthork/GirdScope/releases/download/"
+                        f"v{version}/{asset_name}"
+                    ),
+                    "size": len(content),
+                    "digest": f"sha256:{hashlib.sha256(content).hexdigest()}",
+                }
+            ],
+        }
+
+    def test_update_channels_and_install_capability(self):
+        releases = [
+            self.release("0.7.5", prerelease=True),
+            self.release("0.7.4", prerelease=False),
+        ]
+        beta = update_status_from_releases(
+            releases,
+            "beta",
+            current_version="0.7.4",
+            frozen=True,
+            platform_name="nt",
+        )
+        stable = update_status_from_releases(
+            releases,
+            "stable",
+            current_version="0.7.4",
+            frozen=True,
+            platform_name="nt",
+        )
+        self.assertTrue(beta["available"])
+        self.assertTrue(beta["canInstall"])
+        self.assertEqual(beta["latestVersion"], "0.7.5")
+        self.assertFalse(stable["available"])
+        self.assertEqual(stable["latestVersion"], "0.7.4")
+
+    def test_untrusted_asset_is_never_installable(self):
+        release = self.release(
+            "0.7.5",
+            prerelease=True,
+            asset_url="https://example.invalid/GridScope-0.7.5-Windows.zip",
+        )
+        status = update_status_from_releases(
+            [release],
+            current_version="0.7.4",
+            frozen=True,
+            platform_name="nt",
+        )
+        self.assertTrue(status["available"])
+        self.assertFalse(status["canInstall"])
+        self.assertEqual(status["assetUrl"], "")
+
+    def test_download_verifies_size_and_sha256(self):
+        content = b"GridScope update package"
+        status = update_status_from_releases(
+            [self.release("0.7.5", prerelease=True, content=content)],
+            current_version="0.7.4",
+            frozen=True,
+            platform_name="nt",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            destination = download_update_package(
+                status,
+                Path(directory),
+                opener=lambda request, timeout: io.BytesIO(content),
+            )
+            self.assertEqual(destination.read_bytes(), content)
+            broken = dict(status, assetDigest=f"sha256:{'0' * 64}")
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                download_update_package(
+                    broken,
+                    Path(directory),
+                    opener=lambda request, timeout: io.BytesIO(content),
+                )
+
+
 class DataStoreTests(unittest.TestCase):
     def setUp(self):
         self.temp_directory = tempfile.TemporaryDirectory()
@@ -89,6 +189,17 @@ class DataStoreTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp_directory.cleanup()
+
+    def test_update_preferences_are_saved_independently(self):
+        self.assertEqual(
+            self.store.get_update_preferences(),
+            {"automatic": True, "channel": "beta"},
+        )
+        saved = self.store.save_update_preferences(
+            {"automatic": False, "channel": "stable"}
+        )
+        self.assertEqual(saved, {"automatic": False, "channel": "stable"})
+        self.assertEqual(self.store.get_update_preferences(), saved)
 
     def test_track_images_use_official_slugs_and_safe_generic_svg(self):
         self.assertEqual(

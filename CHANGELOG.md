@@ -2,6 +2,18 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.7.5] - 2026-07-26
+
+- Nuevo sistema de actualizaciones desde las versiones publicadas en GitHub.
+- Comprobación automática opcional y búsqueda manual desde Configuración.
+- Canales Beta y Estable independientes.
+- Las instalaciones con `GridScope.exe` pueden descargar e instalar una versión
+  confirmada por el usuario; las instalaciones desde código abren la descarga.
+- Cada paquete se valida por nombre, origen, tamaño y huella SHA-256 antes de
+  sustituir el ejecutable.
+- Antes de actualizar se conserva `GridScope.previous.exe`; la base de datos y
+  la configuración local no se modifican.
+
 ## [0.7.4] - 2026-07-26
 
 - El piloto de referencia permanece destacado al principio de los Campeonatos

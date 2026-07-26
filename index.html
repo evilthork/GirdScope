@@ -218,6 +218,16 @@
           </div>
         </header>
 
+        <aside class="update-notice" id="updateNotice" role="status" hidden>
+          <span class="update-notice-icon" aria-hidden="true">↑</span>
+          <div>
+            <strong id="updateNoticeTitle">Nueva versión disponible</strong>
+            <small id="updateNoticeMessage">Puedes instalarla desde Configuración.</small>
+          </div>
+          <button class="text-button" type="button" id="openUpdateSettingsButton">Ver actualización</button>
+          <button class="icon-button small" type="button" id="dismissUpdateNoticeButton" aria-label="Ocultar aviso">×</button>
+        </aside>
+
         <section class="view active" id="overview">
           <article class="hero">
             <div class="hero-content">
@@ -643,6 +653,38 @@
               </ol>
               <p class="oauth-notice">El historial web es público, pero no es una API oficial documentada. GridScope usa peticiones moderadas y nunca necesita tus credenciales.</p>
             </section>
+            <section class="panel settings-card update-settings-card" id="updateSettingsCard">
+              <div class="settings-icon update-settings-icon" aria-hidden="true">↑</div>
+              <h3>Actualizaciones de GridScope</h3>
+              <p class="settings-card-intro">Consulta las versiones publicadas en GitHub. La instalación siempre requiere tu confirmación.</p>
+              <div class="connection-box update-version-box">
+                <span class="status-dot" id="updateStatusDot"></span>
+                <div>
+                  <strong id="updateStatusTitle">Versión instalada</strong>
+                  <small id="updateStatusDetail">Leyendo la versión instalada…</small>
+                </div>
+              </div>
+              <label>Canal de actualizaciones
+                <select id="updateChannelSetting">
+                  <option value="beta">Beta · nuevas funciones</option>
+                  <option value="stable">Estable · solo versiones finales</option>
+                </select>
+                <small>Mientras GridScope esté en beta, el canal Beta recibe las versiones 0.x.</small>
+              </label>
+              <label class="toggle-setting">
+                <input id="autoCheckUpdatesSetting" type="checkbox" checked />
+                <span><strong>Comprobar al iniciar</strong><small>Solo consulta el número de versión; nunca descarga ni instala sin permiso.</small></span>
+              </label>
+              <div class="oauth-actions">
+                <button class="secondary-button" type="button" id="checkUpdatesButton">Buscar actualizaciones</button>
+                <button class="primary-button" type="button" id="installUpdateButton" hidden>Descargar e instalar</button>
+              </div>
+              <div class="update-release-notes" id="updateReleaseNotes" hidden>
+                <strong id="updateReleaseName">Novedades</strong>
+                <p id="updateReleaseBody"></p>
+              </div>
+              <p class="oauth-notice" id="updateCheckStatus">La comprobación automática está activada.</p>
+            </section>
             <section class="panel settings-card">
               <div class="settings-icon"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8m-1-5h20v5H2V3Zm8 9h4" /></svg></div>
               <h3 data-generic-data-title>Datos locales</h3>
@@ -667,6 +709,13 @@
       <span class="activity-spinner" aria-hidden="true"></span>
       <div><strong id="activityTitle">Preparando GridScope…</strong><small id="activityMessage">Leyendo los datos locales.</small></div>
       <span class="activity-progress" aria-hidden="true"></span>
+    </div>
+    <div class="update-installing-overlay" id="updateInstallingOverlay" role="alert" aria-live="assertive" hidden>
+      <div>
+        <span class="activity-spinner" aria-hidden="true"></span>
+        <strong id="updateInstallingTitle">Instalando la actualización…</strong>
+        <small id="updateInstallingDetail">GridScope se cerrará y volverá a abrir automáticamente. La base de datos local no se modificará.</small>
+      </div>
     </div>
 
     <dialog id="driverDialog">

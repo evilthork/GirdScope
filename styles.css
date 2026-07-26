@@ -275,6 +275,38 @@ svg {
 .topbar-season-context span, .topbar-season-context small { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-season-context span { font-size: 9px; font-weight: 700; }
 .topbar-season-context small { margin-top: 2px; color: var(--muted); font-size: 7px; }
+.update-notice {
+  position: fixed;
+  z-index: 145;
+  top: 88px;
+  right: 24px;
+  width: min(440px, calc(100vw - 48px));
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto 30px;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid rgba(255,122,47,.34);
+  border-radius: 13px;
+  background: rgba(22, 19, 17, .97);
+  box-shadow: 0 18px 48px rgba(0,0,0,.42);
+  backdrop-filter: blur(18px);
+}
+.update-notice[hidden] { display: none; }
+.update-notice-icon,
+.update-settings-icon {
+  display: grid;
+  place-items: center;
+  color: var(--accent-bright);
+  border: 1px solid rgba(255,122,47,.28);
+  background: rgba(255,122,47,.11);
+  font-weight: 900;
+}
+.update-notice-icon { width: 38px; height: 38px; border-radius: 10px; font-size: 18px; }
+.update-notice strong, .update-notice small { display: block; }
+.update-notice strong { font-size: 10px; }
+.update-notice small { margin-top: 3px; color: var(--muted); font-size: 7px; line-height: 1.35; }
+.update-notice .text-button { white-space: nowrap; }
 .menu-button { display: none !important; }
 
 .demo-pill {
@@ -1038,6 +1070,44 @@ select:focus, input:focus, textarea:focus { border-color: rgba(255,122,47,.6); b
 .toggle-setting strong { color: var(--text); font-size: 9px; }
 .toggle-setting small { margin-top: 3px; color: var(--subtle); font-size: 7px; line-height: 1.4; }
 .data-row { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 9px; }
+.update-settings-card { border-color: rgba(255,122,47,.16); }
+.update-settings-icon { font-size: 18px; }
+.update-version-box { margin: 15px 0; }
+.update-release-notes {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(255,122,47,.16);
+  border-radius: 10px;
+  background: rgba(255,122,47,.035);
+}
+.update-release-notes[hidden] { display: none; }
+.update-release-notes strong { display: block; color: var(--accent-bright); font-size: 9px; }
+.update-release-notes p { margin: 7px 0 0; color: var(--muted); font-size: 8px; line-height: 1.55; white-space: pre-line; }
+.update-installing-overlay {
+  position: fixed;
+  z-index: 500;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5,6,7,.88);
+  backdrop-filter: blur(12px);
+}
+.update-installing-overlay[hidden] { display: none; }
+.update-installing-overlay > div {
+  width: min(470px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 34px;
+  text-align: center;
+  border: 1px solid rgba(255,122,47,.25);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.update-installing-overlay strong { font: 800 18px/1.2 "Manrope", sans-serif; }
+.update-installing-overlay small { max-width: 340px; color: var(--muted); font-size: 9px; line-height: 1.55; }
 .data-row strong { color: var(--text); }
 .data-row:last-of-type { margin-bottom: 16px; }
 
@@ -1856,6 +1926,14 @@ dialog .telemetry-file-list article { padding: 10px; }
   .topbar { height: 72px; padding: 0 16px; }
   .view { padding: 17px 16px 32px; }
   .topbar-actions .demo-pill, .topbar-actions .secondary-button { display: none; }
+  .update-notice {
+    top: 82px;
+    right: 12px;
+    width: calc(100vw - 24px);
+    grid-template-columns: 34px minmax(0, 1fr) 28px;
+  }
+  .update-notice .text-button { grid-column: 2; justify-self: start; }
+  .update-notice > .icon-button { grid-column: 3; grid-row: 1; }
   .topbar-season-context { display: none; }
   .hero { min-height: 400px; background-position: 65% center; align-items: flex-start; }
   .hero-content { width: 100%; padding: 28px 23px; }

@@ -31,6 +31,15 @@ try {
     if (-not $executable) {
         throw "El paquete no contiene GridScope.exe."
     }
+    $updateHelper = Get-ChildItem `
+        -LiteralPath $packageRoot `
+        -Filter "actualizar-gridscope.ps1" `
+        -File `
+        -Recurse |
+        Select-Object -First 1
+    if (-not $updateHelper) {
+        throw "El paquete no contiene el asistente de actualización."
+    }
 
     $env:LOCALAPPDATA = $profileRoot
     $process = Start-Process `
@@ -55,6 +64,9 @@ try {
     }
 
     $bootstrap = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/bootstrap" -TimeoutSec 10
+    $updatePreferences = Invoke-RestMethod `
+        -Uri "http://127.0.0.1:$Port/api/update/preferences" `
+        -TimeoutSec 10
     $databasePath = Join-Path $profileRoot "GridScope\data\apex-local.db"
     [pscustomobject]@{
         Version = $health.version
@@ -62,6 +74,9 @@ try {
         IRacingConfigurado = $bootstrap.simulators.iracing.configured
         AssettoCorsaConfigurado = $bootstrap.simulators.'assetto-corsa'.configured
         RaceRoomConfigurado = $bootstrap.simulators.raceroom.configured
+        ActualizadorIncluido = Test-Path -LiteralPath $updateHelper.FullName
+        CanalActualizaciones = $updatePreferences.channel
+        ComprobacionAutomatica = $updatePreferences.automatic
         IdentidadIRacingVacia = [string]::IsNullOrWhiteSpace(
             $bootstrap.simulators.iracing.ownerIdentity
         )

@@ -5,13 +5,13 @@ GridScope es una aplicación local de estadísticas para **iRacing**,
 comparativas y Campeonatos GridScope sin subir el historial del usuario a
 ningún servidor.
 
-> Versión actual: **0.7.4 Beta**
+> Versión actual: **0.7.5 Beta**
 
 ## Descargar GridScope
 
-[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.4-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.4/GridScope-0.7.4-Windows.zip)
+[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.5-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.5/GridScope-0.7.5-Windows.zip)
 
-**[Descargar GridScope 0.7.4 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.4/GridScope-0.7.4-Windows.zip)**
+**[Descargar GridScope 0.7.5 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.5/GridScope-0.7.5-Windows.zip)**
 
 No requiere instalación: descomprime el ZIP y ejecuta `GridScope.exe`.
 
@@ -35,6 +35,8 @@ No requiere instalación: descomprime el ZIP y ejecuta `GridScope.exe`.
   mínima.
 - Clasificación por todas las carreras o mediante media semanal.
 - Archivo histórico local y copias de seguridad.
+- Actualizaciones opcionales desde GitHub con confirmación manual, verificación
+  SHA-256 y copia del ejecutable anterior.
 - Uso de imágenes y mapas de circuitos desde la instalación local de Assetto
   Corsa cuando están disponibles.
 
@@ -57,7 +59,7 @@ continúan utilizando esa base para no perder su historial.
 
 ### Versión preparada
 
-1. [Descarga `GridScope-0.7.4-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.4/GridScope-0.7.4-Windows.zip).
+1. [Descarga `GridScope-0.7.5-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.5/GridScope-0.7.5-Windows.zip).
 2. Descomprime el archivo.
 3. Ejecuta `GridScope.exe`.
 4. Mantén abierta la ventana del servidor mientras utilizas la aplicación.
@@ -65,6 +67,11 @@ continúan utilizando esa base para no perder su historial.
 Windows puede mostrar una advertencia al tratarse de una aplicación nueva sin
 firma digital. El código fuente completo está disponible en este repositorio
 para su revisión.
+
+A partir de la versión 0.7.5, las futuras versiones se pueden comprobar desde
+**Configuración → Actualizaciones de GridScope**. GridScope nunca instala una
+actualización sin confirmación y no modifica la base de datos durante el
+proceso.
 
 ### Desde el código fuente
 

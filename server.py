@@ -13,9 +13,12 @@ import math
 import os
 import re
 import secrets
+import shutil
 import sqlite3
 import struct
+import subprocess
 import sys
+import threading
 import unicodedata
 import webbrowser
 from collections import Counter
@@ -38,7 +41,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.7.4"
+APP_VERSION = "0.7.5"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -61,6 +64,18 @@ OAUTH_AUTHORIZE_URL = "https://oauth.iracing.com/oauth2/authorize"
 OAUTH_TOKEN_URL = "https://oauth.iracing.com/oauth2/token"
 OAUTH_PROFILE_URL = "https://oauth.iracing.com/oauth2/iracing/profile"
 RACEROOM_BASE_URL = "https://game.raceroom.com"
+UPDATE_REPOSITORY = "evilthork/GirdScope"
+UPDATE_RELEASES_URL = (
+    f"https://api.github.com/repos/{UPDATE_REPOSITORY}/releases?per_page=20"
+)
+UPDATE_DOWNLOAD_PREFIX = (
+    f"https://github.com/{UPDATE_REPOSITORY}/releases/download/"
+)
+UPDATE_CACHE_SECONDS = 600
+UPDATE_MAX_PACKAGE_BYTES = 150_000_000
+UPDATE_HELPER_NAME = "actualizar-gridscope.ps1"
+_update_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
+_update_cache_lock = threading.Lock()
 
 
 TRACK_SLUG_ALIASES = {
@@ -110,6 +125,246 @@ DEMO_ROUNDS = [
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def semantic_version(value: str) -> tuple[int, int, int]:
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(value).strip())
+    if not match:
+        raise ValueError("La versión publicada no tiene un formato válido")
+    return tuple(int(part) for part in match.groups())
+
+
+def update_status_from_releases(
+    releases: Any,
+    channel: str = "beta",
+    current_version: str = APP_VERSION,
+    frozen: bool | None = None,
+    platform_name: str | None = None,
+) -> dict[str, Any]:
+    if channel not in {"beta", "stable"}:
+        raise ValueError("El canal de actualizaciones no es válido")
+    if not isinstance(releases, list):
+        raise ValueError("GitHub ha devuelto una lista de versiones no válida")
+    candidates: list[tuple[tuple[int, int, int], dict[str, Any]]] = []
+    for release in releases:
+        if not isinstance(release, dict) or release.get("draft"):
+            continue
+        if channel == "stable" and release.get("prerelease"):
+            continue
+        try:
+            version = semantic_version(str(release.get("tag_name", "")))
+        except ValueError:
+            continue
+        candidates.append((version, release))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    current = semantic_version(current_version)
+    packaged = bool(getattr(sys, "frozen", False) if frozen is None else frozen)
+    operating_system = os.name if platform_name is None else platform_name
+    if not candidates:
+        return {
+            "currentVersion": current_version,
+            "latestVersion": current_version,
+            "available": False,
+            "channel": channel,
+            "canInstall": False,
+            "installReason": "No hay versiones publicadas en este canal.",
+        }
+    latest, release = candidates[0]
+    latest_text = ".".join(str(part) for part in latest)
+    expected_asset_name = f"GridScope-{latest_text}-Windows.zip"
+    asset = next(
+        (
+            item
+            for item in release.get("assets", [])
+            if isinstance(item, dict) and item.get("name") == expected_asset_name
+        ),
+        None,
+    )
+    asset_url = str(asset.get("browser_download_url", "")) if asset else ""
+    trusted_asset = (
+        asset_url.startswith(UPDATE_DOWNLOAD_PREFIX)
+        and asset_url.endswith(f"/{expected_asset_name}")
+    )
+    digest = str(asset.get("digest", "")) if asset else ""
+    trusted_digest = bool(re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest))
+    available = latest > current
+    can_install = (
+        available
+        and packaged
+        and operating_system == "nt"
+        and asset is not None
+        and trusted_asset
+        and trusted_digest
+    )
+    if not available:
+        install_reason = "GridScope ya está actualizado."
+    elif not packaged:
+        install_reason = (
+            "Esta instalación se ejecuta desde el código fuente; descarga la "
+            "nueva versión manualmente."
+        )
+    elif operating_system != "nt":
+        install_reason = "La instalación automática está disponible en Windows."
+    elif not asset or not trusted_asset:
+        install_reason = "La versión no contiene un paquete Windows válido."
+    elif asset and trusted_asset and not trusted_digest:
+        install_reason = "El paquete publicado no incluye una firma SHA-256 válida."
+    else:
+        install_reason = ""
+    return {
+        "currentVersion": current_version,
+        "latestVersion": latest_text,
+        "available": available,
+        "channel": channel,
+        "prerelease": bool(release.get("prerelease")),
+        "name": str(release.get("name") or f"GridScope {latest_text}"),
+        "notes": str(release.get("body") or ""),
+        "publishedAt": release.get("published_at"),
+        "releaseUrl": str(release.get("html_url") or ""),
+        "assetName": expected_asset_name if asset else "",
+        "assetUrl": asset_url if trusted_asset else "",
+        "assetSize": as_int(asset.get("size"), 0) if asset else 0,
+        "assetDigest": digest if trusted_digest else "",
+        "canInstall": can_install,
+        "installReason": install_reason,
+    }
+
+
+def fetch_update_status(
+    channel: str = "beta",
+    *,
+    force: bool = False,
+    opener: Any = urlopen,
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    with _update_cache_lock:
+        cached = _update_cache.get(channel)
+        if (
+            not force
+            and cached
+            and now - cached[0] < timedelta(seconds=UPDATE_CACHE_SECONDS)
+        ):
+            return dict(cached[1])
+    request = Request(
+        UPDATE_RELEASES_URL,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"GridScope/{APP_VERSION}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with opener(request, timeout=20) as response:
+            releases = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError) as error:
+        raise ValueError(
+            "No se ha podido consultar las actualizaciones en GitHub"
+        ) from error
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("GitHub ha devuelto una respuesta no válida") from error
+    status = update_status_from_releases(releases, channel)
+    with _update_cache_lock:
+        _update_cache[channel] = (now, dict(status))
+    return status
+
+
+def download_update_package(
+    status: dict[str, Any],
+    destination_directory: Path,
+    *,
+    opener: Any = urlopen,
+) -> Path:
+    asset_name = str(status.get("assetName", ""))
+    asset_url = str(status.get("assetUrl", ""))
+    latest_version = str(status.get("latestVersion", ""))
+    if asset_name != f"GridScope-{latest_version}-Windows.zip":
+        raise ValueError("El paquete de actualización no coincide con la versión")
+    if (
+        not asset_url.startswith(UPDATE_DOWNLOAD_PREFIX)
+        or not asset_url.endswith(f"/{asset_name}")
+    ):
+        raise ValueError("La dirección del paquete de actualización no es válida")
+    expected_size = as_int(status.get("assetSize"), 0)
+    if expected_size <= 0 or expected_size > UPDATE_MAX_PACKAGE_BYTES:
+        raise ValueError("El tamaño del paquete de actualización no es válido")
+    destination_directory.mkdir(parents=True, exist_ok=True)
+    destination = destination_directory / asset_name
+    partial = destination.with_suffix(destination.suffix + ".part")
+    request = Request(
+        asset_url,
+        headers={"User-Agent": f"GridScope/{APP_VERSION}"},
+    )
+    digest = hashlib.sha256()
+    downloaded = 0
+    try:
+        with opener(request, timeout=90) as response, partial.open("wb") as output:
+            while chunk := response.read(1024 * 1024):
+                downloaded += len(chunk)
+                if downloaded > UPDATE_MAX_PACKAGE_BYTES:
+                    raise ValueError("El paquete de actualización es demasiado grande")
+                digest.update(chunk)
+                output.write(chunk)
+        if downloaded != expected_size:
+            raise ValueError("La descarga de la actualización está incompleta")
+        expected_digest = str(status.get("assetDigest", ""))
+        if not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", expected_digest):
+            raise ValueError("La actualización no incluye una firma SHA-256 válida")
+        if digest.hexdigest().lower() != expected_digest.removeprefix(
+            "sha256:"
+        ).lower():
+            raise ValueError("La actualización no supera la verificación SHA-256")
+        os.replace(partial, destination)
+    finally:
+        if partial.exists():
+            partial.unlink()
+    return destination
+
+
+def start_windows_update(status: dict[str, Any]) -> dict[str, Any]:
+    if not getattr(sys, "frozen", False) or os.name != "nt":
+        raise ValueError(
+            "La instalación automática solo está disponible en GridScope.exe para Windows"
+        )
+    if not status.get("available") or not status.get("canInstall"):
+        raise ValueError(str(status.get("installReason") or "No hay actualización"))
+    update_directory = USER_DATA_DIR / "updates"
+    package_path = download_update_package(status, update_directory)
+    helper_source = BASE_DIR / UPDATE_HELPER_NAME
+    if not helper_source.is_file():
+        raise ValueError("El paquete actual no contiene el asistente de actualización")
+    helper_path = update_directory / UPDATE_HELPER_NAME
+    shutil.copy2(helper_source, helper_path)
+    executable_path = Path(sys.executable).resolve()
+    command = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-WindowStyle",
+        "Hidden",
+        "-File",
+        str(helper_path),
+        "-PackagePath",
+        str(package_path),
+        "-InstallDirectory",
+        str(executable_path.parent),
+        "-ExecutableName",
+        executable_path.name,
+        "-TargetProcessId",
+        str(os.getpid()),
+    ]
+    creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    subprocess.Popen(
+        command,
+        cwd=str(update_directory),
+        close_fds=True,
+        creationflags=creation_flags,
+    )
+    return {
+        "started": True,
+        "version": status["latestVersion"],
+        "message": "La actualización se instalará al cerrar GridScope.",
+    }
 
 
 def pick_value(mapping: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -7726,6 +7981,42 @@ class DataStore:
             "platform": platform,
         }
 
+    def get_update_preferences(self) -> dict[str, Any]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT key, value FROM settings
+                WHERE key IN ('update_auto_check', 'update_channel')
+                """
+            ).fetchall()
+        settings = {str(row["key"]): str(row["value"]) for row in rows}
+        channel = settings.get("update_channel", "beta")
+        if channel not in {"beta", "stable"}:
+            channel = "beta"
+        return {
+            "automatic": settings.get("update_auto_check", "1") == "1",
+            "channel": channel,
+        }
+
+    def save_update_preferences(self, values: dict[str, Any]) -> dict[str, Any]:
+        channel = str(values.get("channel", "beta")).strip().lower()
+        if channel not in {"beta", "stable"}:
+            raise ValueError("El canal de actualizaciones no es válido")
+        automatic = bool(values.get("automatic", True))
+        with self.connect() as connection:
+            for key, value in (
+                ("update_auto_check", "1" if automatic else "0"),
+                ("update_channel", channel),
+            ):
+                connection.execute(
+                    """
+                    INSERT INTO settings (key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                    """,
+                    (key, value),
+                )
+        return {"automatic": automatic, "channel": channel}
+
     def save_oauth_client_id(self, client_id: str) -> dict[str, Any]:
         normalized = client_id.strip()
         if not 3 <= len(normalized) <= 200 or any(character.isspace() for character in normalized):
@@ -8157,6 +8448,18 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
             if path == "/api/bootstrap":
                 self.send_json(self.store.get_bootstrap())
                 return
+            if path == "/api/update/preferences":
+                self.send_json(self.store.get_update_preferences())
+                return
+            if path == "/api/update/status":
+                query = parse_qs(parsed_url.query)
+                preferences = self.store.get_update_preferences()
+                channel = query.get("channel", [preferences["channel"]])[0]
+                force = query.get("force", ["0"])[0] == "1"
+                status = fetch_update_status(channel, force=force)
+                status["automatic"] = preferences["automatic"]
+                self.send_json(status)
+                return
             if path == "/api/assets/track":
                 query = parse_qs(parsed_url.query)
                 track_name = query.get("name", [""])[0].strip()
@@ -8318,6 +8621,15 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
             if path == "/api/backup":
                 self.send_json(self.store.create_backup(), HTTPStatus.CREATED)
                 return
+            if path == "/api/update/install":
+                payload = self.read_json()
+                preferences = self.store.get_update_preferences()
+                channel = str(payload.get("channel", preferences["channel"]))
+                status = fetch_update_status(channel, force=True)
+                result = start_windows_update(status)
+                self.send_json(result, HTTPStatus.ACCEPTED)
+                threading.Timer(0.75, self.server.shutdown).start()
+                return
             if path == "/api/championships":
                 self.send_json(
                     self.store.save_custom_championship(self.read_json()),
@@ -8386,6 +8698,11 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
         try:
             if path == "/api/settings":
                 self.send_json(self.store.update_settings(self.read_json()))
+                return
+            if path == "/api/update/preferences":
+                self.send_json(
+                    self.store.save_update_preferences(self.read_json())
+                )
                 return
             if path == "/api/simulators/active":
                 payload = self.read_json()

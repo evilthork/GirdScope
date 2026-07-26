@@ -49,6 +49,7 @@ try {
         "app.js",
         "index.html",
         "styles.css",
+        "actualizar-gridscope.ps1",
         "abrir-aplicacion.ps1",
         "README.md",
         "CHANGELOG.md",
@@ -64,6 +65,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\crear-ejecutable-windows.ps1") -Destination (Join-Path $sourceFolder "scripts")
     Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\crear-version-publica.ps1") -Destination (Join-Path $sourceFolder "scripts")
     Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\probar-paquete-publico.ps1") -Destination (Join-Path $sourceFolder "scripts")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\probar-actualizador.ps1") -Destination (Join-Path $sourceFolder "scripts")
     Copy-Item -LiteralPath (Join-Path $projectRoot "tests\__init__.py") -Destination (Join-Path $sourceFolder "tests")
     Copy-Item -LiteralPath (Join-Path $projectRoot "tests\test_server.py") -Destination (Join-Path $sourceFolder "tests")
     Copy-Item -LiteralPath (Join-Path $projectRoot "tests\fixtures\iracing-result.json") -Destination (Join-Path $sourceFolder "tests\fixtures")
@@ -80,7 +82,13 @@ try {
         $windowsFolder = Join-Path $temporaryRoot "GridScope-$version-Windows"
         New-Item -ItemType Directory -Path $windowsFolder -Force | Out-Null
         Copy-Item -LiteralPath $executable -Destination $windowsFolder
-        foreach ($filename in @("README.md", "CHANGELOG.md", "LICENSE", "VERSION")) {
+        foreach ($filename in @(
+            "README.md",
+            "CHANGELOG.md",
+            "LICENSE",
+            "VERSION",
+            "actualizar-gridscope.ps1"
+        )) {
             Copy-Item -LiteralPath (Join-Path $projectRoot $filename) -Destination $windowsFolder
         }
         $windowsZip = Join-Path $releaseRoot "GridScope-$version-Windows.zip"

@@ -101,6 +101,9 @@ let automaticScanRunning = false;
 let activitySequence = 0;
 let activityDelay = null;
 const activeActivities = new Map();
+let updatePreferences = { automatic: true, channel: "beta" };
+let currentUpdateStatus = null;
+let installedAppVersion = "";
 
 function renderActivityIndicator() {
   const activity = Array.from(activeActivities.values()).at(-1);
@@ -244,6 +247,204 @@ async function apiRequest(path, options = {}) {
   const contentType = response.headers.get("content-type") || "";
   return contentType.includes("application/json") ? response.json() : response;
 }
+
+function renderUpdatePreferences() {
+  const channel = document.querySelector("#updateChannelSetting");
+  const automatic = document.querySelector("#autoCheckUpdatesSetting");
+  if (channel) channel.value = updatePreferences.channel;
+  if (automatic) automatic.checked = updatePreferences.automatic;
+}
+
+function renderUpdateStatus(status) {
+  currentUpdateStatus = status;
+  installedAppVersion = status.currentVersion || installedAppVersion;
+  const dot = document.querySelector("#updateStatusDot");
+  const title = document.querySelector("#updateStatusTitle");
+  const detail = document.querySelector("#updateStatusDetail");
+  const installButton = document.querySelector("#installUpdateButton");
+  const notes = document.querySelector("#updateReleaseNotes");
+  const notice = document.querySelector("#updateNotice");
+  dot.classList.toggle("warning", Boolean(status.available));
+  title.textContent = status.available
+    ? `GridScope ${status.latestVersion} disponible`
+    : "GridScope está actualizado";
+  detail.textContent = status.available
+    ? `Instalada ${status.currentVersion} · canal ${status.channel === "stable" ? "Estable" : "Beta"}`
+    : `Versión instalada ${status.currentVersion} · canal ${status.channel === "stable" ? "Estable" : "Beta"}`;
+  document.querySelector("#updateCheckStatus").textContent = status.available
+    ? status.canInstall
+      ? "La actualización está preparada para descargarse e instalarse."
+      : status.installReason
+    : status.installReason || "No hay una versión más reciente en este canal.";
+  document.querySelector("#updateReleaseName").textContent =
+    status.name || `GridScope ${status.latestVersion}`;
+  document.querySelector("#updateReleaseBody").textContent =
+    status.notes || "Esta versión no incluye notas adicionales.";
+  notes.hidden = !status.available;
+  installButton.hidden = !status.available;
+  installButton.textContent = status.canInstall
+    ? "Descargar e instalar"
+    : "Abrir página de descarga";
+  installButton.dataset.updateAction = status.canInstall ? "install" : "download";
+  if (status.available) {
+    document.querySelector("#updateNoticeTitle").textContent =
+      `GridScope ${status.latestVersion} disponible`;
+    document.querySelector("#updateNoticeMessage").textContent = status.canInstall
+      ? "Puedes descargarla e instalarla sin perder tus datos."
+      : "Consulta las novedades y descarga la nueva versión.";
+    notice.hidden = false;
+  }
+}
+
+async function saveUpdatePreferences() {
+  const preferences = {
+    automatic: document.querySelector("#autoCheckUpdatesSetting").checked,
+    channel: document.querySelector("#updateChannelSetting").value
+  };
+  updatePreferences = await apiRequest("/api/update/preferences", {
+    method: "PUT",
+    body: JSON.stringify(preferences)
+  });
+  renderUpdatePreferences();
+  return updatePreferences;
+}
+
+async function checkForUpdates({ manual = false, force = false } = {}) {
+  const button = document.querySelector("#checkUpdatesButton");
+  const activity = manual
+    ? beginActivity(
+        "Buscando actualizaciones…",
+        "Consultando las versiones publicadas de GridScope en GitHub."
+      )
+    : null;
+  if (manual) setButtonBusy(button, true, "Buscando…");
+  try {
+    const query = new URLSearchParams({
+      channel: updatePreferences.channel,
+      ...(force ? { force: "1" } : {})
+    });
+    const status = await apiRequest(`/api/update/status?${query}`);
+    renderUpdateStatus(status);
+    if (manual) {
+      showToast(
+        status.available ? `GridScope ${status.latestVersion} disponible` : "GridScope está actualizado",
+        status.available
+          ? "Revisa las novedades y decide cuándo instalarla."
+          : `Ya utilizas la versión ${status.currentVersion}.`
+      );
+    }
+    return status;
+  } catch (error) {
+    document.querySelector("#updateCheckStatus").textContent = error.message;
+    if (manual) showToast("No se han podido buscar actualizaciones", error.message);
+    return null;
+  } finally {
+    if (manual) setButtonBusy(button, false);
+    if (activity != null) endActivity(activity);
+  }
+}
+
+async function initializeUpdateSystem() {
+  try {
+    const [preferences, health] = await Promise.all([
+      apiRequest("/api/update/preferences"),
+      apiRequest("/api/health")
+    ]);
+    updatePreferences = preferences;
+    installedAppVersion = health.version || "";
+    renderUpdatePreferences();
+    document.querySelector("#updateStatusDetail").textContent =
+      `Versión instalada ${installedAppVersion}`;
+    document.querySelector("#updateCheckStatus").textContent = preferences.automatic
+      ? "La comprobación automática está activada."
+      : "La comprobación automática está desactivada.";
+    if (preferences.automatic) {
+      window.setTimeout(() => checkForUpdates(), 1400);
+    }
+  } catch {
+    document.querySelector("#updateCheckStatus").textContent =
+      "Las actualizaciones se pueden comprobar manualmente.";
+  }
+}
+
+document.querySelector("#checkUpdatesButton").addEventListener("click", () => {
+  checkForUpdates({ manual: true, force: true });
+});
+
+document.querySelector("#updateChannelSetting").addEventListener("change", async () => {
+  try {
+    await saveUpdatePreferences();
+    await checkForUpdates({ manual: true, force: true });
+  } catch (error) {
+    showToast("No se ha guardado el canal", error.message);
+  }
+});
+
+document.querySelector("#autoCheckUpdatesSetting").addEventListener("change", async () => {
+  try {
+    const preferences = await saveUpdatePreferences();
+    document.querySelector("#updateCheckStatus").textContent = preferences.automatic
+      ? "GridScope buscará nuevas versiones al iniciarse."
+      : "La búsqueda automática está desactivada; puedes comprobarla manualmente.";
+    showToast(
+      preferences.automatic ? "Comprobación automática activada" : "Comprobación automática desactivada",
+      preferences.automatic
+        ? "La búsqueda se hará en segundo plano y nunca instalará nada sin tu permiso."
+        : "GridScope solo buscará versiones nuevas cuando pulses el botón."
+    );
+  } catch (error) {
+    renderUpdatePreferences();
+    showToast("No se ha guardado la preferencia", error.message);
+  }
+});
+
+document.querySelector("#installUpdateButton").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  if (!currentUpdateStatus?.available) return;
+  if (button.dataset.updateAction === "download") {
+    const releaseUrl = currentUpdateStatus.releaseUrl;
+    if (releaseUrl) {
+      const releaseWindow = window.open(releaseUrl, "_blank", "noopener,noreferrer");
+      if (releaseWindow) releaseWindow.opener = null;
+    }
+    return;
+  }
+  const accepted = window.confirm(
+    `Se descargará GridScope ${currentUpdateStatus.latestVersion}, se guardará una copia de la versión actual y la aplicación se reiniciará. Tus datos locales no se modificarán.\n\n¿Continuar?`
+  );
+  if (!accepted) return;
+  const overlay = document.querySelector("#updateInstallingOverlay");
+  overlay.hidden = false;
+  setButtonBusy(button, true, "Descargando…");
+  try {
+    await apiRequest("/api/update/install", {
+      method: "POST",
+      body: JSON.stringify({ channel: updatePreferences.channel })
+    });
+    document.querySelector("#updateInstallingTitle").textContent = "Cerrando GridScope para actualizar…";
+    document.querySelector("#updateInstallingDetail").textContent =
+      "El asistente sustituirá el ejecutable, conservará una copia anterior y volverá a abrir la aplicación.";
+  } catch (error) {
+    overlay.hidden = true;
+    setButtonBusy(button, false);
+    showToast("No se ha podido iniciar la actualización", error.message);
+  }
+});
+
+document.querySelector("#openUpdateSettingsButton").addEventListener("click", () => {
+  document.querySelector("#updateNotice").hidden = true;
+  switchView("settings");
+  window.setTimeout(() => {
+    document.querySelector("#updateSettingsCard").scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+  }, 100);
+});
+
+document.querySelector("#dismissUpdateNoticeButton").addEventListener("click", () => {
+  document.querySelector("#updateNotice").hidden = true;
+});
 
 async function loadBootstrap() {
   bootstrapState = await apiRequest("/api/bootstrap");
@@ -2729,6 +2930,7 @@ function renderPlatformContext() {
 
 function renderSettings() {
   renderPlatformContext();
+  renderUpdatePreferences();
   const platform = appState.settings.platform || appState.league.platform;
   const isAssetto = platform === "assetto-corsa";
   const isRaceRoom = platform === "raceroom";
@@ -3974,5 +4176,5 @@ async function runAutomaticScans() {
   }
 }
 
-initializeApplication();
+initializeApplication().then(initializeUpdateSystem);
 setInterval(runAutomaticScans, 60_000);

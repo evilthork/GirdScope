@@ -40,6 +40,7 @@ try {
         --add-data "index.html;." `
         --add-data "app.js;." `
         --add-data "styles.css;." `
+        --add-data "actualizar-gridscope.ps1;." `
         --add-data "assets;assets" `
         server.py
     if ($LASTEXITCODE -ne 0) {
