@@ -2,6 +2,23 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.7.6] - 2026-07-26
+
+- Los Campeonatos GridScope de RaceRoom agrupan ahora cada campeonato ranked
+  por año, en lugar de mostrar una temporada vacía basada en el formato de
+  seasons de iRacing.
+- Se ocultan automáticamente los periodos sin carreras puntuables.
+- Las ayudas, tarjetas y tablas de RaceRoom utilizan Rating, Reputation,
+  Incident Points y tamaño de parrilla, sin mezclar iRating, Safety Rating,
+  SoF ni splits de iRacing.
+- Los detalles de pilotos y carreras conservan las métricas propias GridScore
+  y Limpieza, claramente separadas de las valoraciones oficiales de RaceRoom.
+- Las comparativas frente a frente adaptan sus columnas a cada simulador. En
+  Assetto Corsa se eliminan SoF y Split, se muestran parrilla y mejores vueltas
+  y se omiten las posiciones de salida cuando Content Manager no las guardó.
+- Las filas de «Tu progreso» en Comparativas abren ahora el resultado completo
+  de la carrera mediante ratón o teclado.
+
 ## [0.7.5] - 2026-07-26
 
 - Nuevo sistema de actualizaciones desde las versiones publicadas en GitHub.

@@ -41,7 +41,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.7.5"
+APP_VERSION = "0.7.6"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -6816,12 +6816,18 @@ class DataStore:
     def get_rival_comparisons(self) -> dict[str, Any]:
         with self.connect() as connection:
             league_id, owner_iracing_id = self._active_league_and_owner(connection)
+            league = connection.execute(
+                "SELECT platform FROM leagues WHERE id = ?",
+                (league_id,),
+            ).fetchone()
+            platform = league["platform"] if league else "iracing"
             owner = connection.execute(
                 "SELECT id, name FROM drivers WHERE iracing_id = ?",
                 (owner_iracing_id,),
             ).fetchone()
             if not owner:
                 return {
+                    "platform": platform,
                     "owner": {
                         "iracingId": owner_iracing_id,
                         "name": f"Piloto {owner_iracing_id}",
@@ -6843,9 +6849,15 @@ class DataStore:
                        owner_result.finish_position AS owner_position,
                        owner_result.start_position AS owner_start_position,
                        owner_result.incidents AS owner_incidents,
+                       owner_result.laps_complete AS owner_laps_complete,
+                       owner_result.best_lap_time AS owner_best_lap_time,
+                       owner_result.distance_percent AS owner_distance_percent,
                        rival_result.finish_position AS rival_position,
                        rival_result.start_position AS rival_start_position,
-                       rival_result.incidents AS rival_incidents
+                       rival_result.incidents AS rival_incidents,
+                       rival_result.laps_complete AS rival_laps_complete,
+                       rival_result.best_lap_time AS rival_best_lap_time,
+                       rival_result.distance_percent AS rival_distance_percent
                 FROM race_results owner_result
                 JOIN race_events re ON re.id = owner_result.event_id
                 JOIN race_results rival_result
@@ -6885,8 +6897,14 @@ class DataStore:
                     "splitTotal": row["split_total"],
                     "ownerPosition": row["owner_position"],
                     "ownerStartPosition": row["owner_start_position"],
+                    "ownerLapsComplete": row["owner_laps_complete"],
+                    "ownerBestLapTime": row["owner_best_lap_time"],
+                    "ownerDistancePercent": row["owner_distance_percent"],
                     "rivalPosition": row["rival_position"],
                     "rivalStartPosition": row["rival_start_position"],
+                    "rivalLapsComplete": row["rival_laps_complete"],
+                    "rivalBestLapTime": row["rival_best_lap_time"],
+                    "rivalDistancePercent": row["rival_distance_percent"],
                     "ownerIncidents": row["owner_incidents"],
                     "rivalIncidents": row["rival_incidents"],
                 }
@@ -6958,6 +6976,7 @@ class DataStore:
             )
         )
         return {
+            "platform": platform,
             "owner": {"iracingId": owner_iracing_id, "name": owner["name"]},
             "summary": {
                 "races": len(race_ids),
@@ -7225,6 +7244,7 @@ class DataStore:
                         ],
                         "splitNumber": event["detail"]["event"]["splitNumber"],
                         "splitTotal": event["detail"]["event"]["splitTotal"],
+                        "fieldSize": event["detail"]["event"]["fieldSize"],
                         "participants": len(present),
                     }
                 )
@@ -7310,6 +7330,8 @@ class DataStore:
                             "leaguePosition": present.index(result) + 1,
                             "leagueParticipants": len(present),
                             "incidents": result["incidents"],
+                            "rating": result.get("newIRating"),
+                            "reputation": result.get("newSafetyRating"),
                             "score": aggregate["raceScores"][-1],
                             "gridScore": result.get("gridScore"),
                             "performanceScore": result.get("performanceScore"),
@@ -7523,6 +7545,9 @@ class DataStore:
         yearly_groups: dict[int, list[dict[str, Any]]] = {}
         monthly_groups: dict[tuple[int, int], list[dict[str, Any]]] = {}
         season_groups: dict[tuple[int, int], list[dict[str, Any]]] = {}
+        race_room_season_groups: dict[
+            tuple[str, int], list[dict[str, Any]]
+        ] = {}
         for event in events:
             if event["date"] is not None:
                 yearly_groups.setdefault(event["date"].year, []).append(event)
@@ -7531,6 +7556,11 @@ class DataStore:
                 ).append(event)
             season_year = as_int(event.get("seasonYear"), 0)
             season_quarter = as_int(event.get("seasonQuarter"), 0)
+            if active_platform == "raceroom" and season_year:
+                race_room_season_groups.setdefault(
+                    (str(event["seriesName"]), season_year), []
+                ).append(event)
+                continue
             if not season_year or not season_quarter:
                 season_match = re.search(
                     r"(\d{4}).*?Season\s+(\d+)",
@@ -7551,17 +7581,48 @@ class DataStore:
                 yearly_groups.items(), key=lambda item: item[0], reverse=True
             )
         ]
-        season_periods = [
-            build_league(
-                "season",
-                f"{year} · Temporada {quarter}",
-                grouped,
-                f"season:{year}:{quarter}",
+        if active_platform == "raceroom":
+            ordered_race_room_seasons = sorted(
+                race_room_season_groups.items(),
+                key=lambda item: (
+                    max(
+                        (
+                            event["date"]
+                            for event in item[1]
+                            if event["date"] is not None
+                        ),
+                        default=datetime.min.replace(tzinfo=timezone.utc),
+                    ),
+                    item[0][0].casefold(),
+                ),
+                reverse=True,
             )
-            for (year, quarter), grouped in sorted(
-                season_groups.items(), key=lambda item: item[0], reverse=True
-            )
-        ]
+            season_periods = [
+                build_league(
+                    "season",
+                    f"{series_name} · {year}",
+                    grouped,
+                    (
+                        "season:raceroom:"
+                        + hashlib.sha256(
+                            f"{series_name}\0{year}".encode("utf-8")
+                        ).hexdigest()[:16]
+                    ),
+                )
+                for (series_name, year), grouped in ordered_race_room_seasons
+            ]
+        else:
+            season_periods = [
+                build_league(
+                    "season",
+                    f"{year} · Temporada {quarter}",
+                    grouped,
+                    f"season:{year}:{quarter}",
+                )
+                for (year, quarter), grouped in sorted(
+                    season_groups.items(), key=lambda item: item[0], reverse=True
+                )
+            ]
         monthly_periods = [
             build_league(
                 "monthly",
@@ -7576,6 +7637,16 @@ class DataStore:
         monthly_periods = [
             period
             for period in monthly_periods
+            if period["summary"]["races"] > 0
+        ]
+        yearly_periods = [
+            period
+            for period in yearly_periods
+            if period["summary"]["races"] > 0
+        ]
+        season_periods = [
+            period
+            for period in season_periods
             if period["summary"]["races"] > 0
         ]
         eternal_period = build_league(

@@ -491,12 +491,20 @@ class DataStoreTests(unittest.TestCase):
         self.assertEqual(comparisons["summary"]["races"], 1)
         self.assertEqual(comparisons["summary"]["uniqueRivals"], 2)
         self.assertEqual(comparisons["summary"]["recurrentRivals"], 0)
+        self.assertEqual(comparisons["platform"], "iracing")
         self.assertTrue(
             all(rival["ownerAhead"] == 1 for rival in comparisons["rivals"])
         )
         self.assertTrue(
             all(len(rival["meetingDetails"]) == 1 for rival in comparisons["rivals"])
         )
+        meeting = comparisons["rivals"][0]["meetingDetails"][0]
+        self.assertIn("ownerLapsComplete", meeting)
+        self.assertIn("ownerBestLapTime", meeting)
+        self.assertIn("ownerDistancePercent", meeting)
+        self.assertIn("rivalLapsComplete", meeting)
+        self.assertIn("rivalBestLapTime", meeting)
+        self.assertIn("rivalDistancePercent", meeting)
 
     def test_session_detail_aggregates_repeated_drivers_and_ratings(self):
         fixture = Path(__file__).parent / "fixtures" / "iracing-result.json"
@@ -1194,6 +1202,58 @@ class DataStoreTests(unittest.TestCase):
             ).fetchall()
         self.assertEqual([row["scoring_eligible"] for row in rows], [1, 0])
         self.assertEqual(rows[1]["distance_percent"], 40)
+
+        recurring_payload = copy.deepcopy(payload)
+        recurring_payload["RaceResult"][1]["Laps"] = [
+            {"Time": 91_000, "Valid": True} for _ in range(10)
+        ]
+        for offset, race_hash in enumerate(("def456", "ghi789"), 1):
+            recurring_payload["RaceHash"] = race_hash
+            recurring_payload["RaceFinishTime"] = payload["RaceFinishTime"] + (
+                offset * 86_400
+            )
+            recurring = normalize_raceroom_result(
+                recurring_payload, "10", 50
+            )
+            self.store._import_normalized_result(
+                f"raceroom-{race_hash}.json",
+                recurring_payload,
+                recurring,
+            )
+        with self.store.connect() as connection:
+            race_room_league = connection.execute(
+                """
+                SELECT id FROM leagues
+                WHERE platform = 'raceroom'
+                ORDER BY id DESC LIMIT 1
+                """
+            ).fetchone()
+            connection.execute("UPDATE leagues SET active = 0")
+            connection.execute(
+                "UPDATE leagues SET active = 1 WHERE id = ?",
+                (race_room_league["id"],),
+            )
+            connection.execute(
+                """
+                INSERT INTO settings (key, value)
+                VALUES ('owner_raceroom_id', 'rr:10')
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """
+            )
+        championships = self.store.get_coincidence_leagues()
+        self.assertTrue(championships["periods"]["season"])
+        self.assertTrue(
+            championships["periods"]["season"][0]["label"].startswith(
+                "RaceRoom Ranked"
+            )
+        )
+        self.assertTrue(
+            all(
+                period["summary"]["races"] > 0
+                for scope in ("yearly", "season", "monthly")
+                for period in championships["periods"][scope]
+            )
+        )
 
     def test_raceroom_profile_accepts_public_and_internal_urls(self):
         self.assertEqual(

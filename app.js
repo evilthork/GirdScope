@@ -717,12 +717,16 @@ function duelExplanation() {
 function fieldContactExplanation(platform = appState.settings?.platform || appState.league?.platform, period = "el periodo indicado") {
   return platform === "assetto-corsa"
     ? `Suma del contador de incidentes guardado por Content Manager para todos los pilotos de todas las carreras válidas de ${period}. Es un total de parrilla y no representa únicamente al piloto de referencia. El historial no permite separar con certeza cada tipo de incidente.`
+    : platform === "raceroom"
+      ? `Suma de los Incident Points publicados por RaceRoom para todos los pilotos de todas las carreras válidas de ${period}. Es un total de parrilla y no representa únicamente al piloto de referencia.`
     : `Suma de los puntos de incidente registrados por iRacing para todos los pilotos de todas las carreras válidas de ${period}. Es un total de parrilla: no representa únicamente al piloto de referencia.`;
 }
 
 function personalContactExplanation(platform = appState.settings?.platform || appState.league?.platform) {
   return platform === "assetto-corsa"
     ? "Suma del contador de incidentes que Content Manager atribuye al piloto de referencia en sus carreras válidas. La media inferior se calcula como incidentes totales ÷ carreras y no incluye a los demás pilotos. El historial no permite separar con certeza cada tipo de incidente."
+    : platform === "raceroom"
+      ? "Suma de los Incident Points que RaceRoom publica para el piloto de referencia en sus carreras válidas. La media inferior es el total dividido entre esas carreras y no incluye a los demás participantes."
     : "Suma de los puntos de incidente que iRacing atribuye al piloto de referencia en sus carreras válidas. La media inferior se calcula como incidentes totales ÷ carreras; no incluye los incidentes de los demás pilotos.";
 }
 
@@ -865,12 +869,22 @@ const platformMetricGlossaries = {
     ["limpieza", cleanlinessFormulaExplanation("iracing")],
   ]),
   raceroom: new Map([
+    ["campeonato", "Periodo formado por una serie ranked concreta de RaceRoom dentro de un año. Permite comparar solo las carreras pertenecientes a esa combinación."],
+    ["temporada", "Campeonato ranked de RaceRoom agrupado por nombre de serie y año. RaceRoom no utiliza las temporadas trimestrales de iRacing."],
+    ["temporadas", "Campeonatos ranked de RaceRoom agrupados por nombre de serie y año. Cada periodo reúne únicamente las carreras de esa combinación."],
+    ["serie", "Categoría o campeonato ranked detectado en los resultados públicos de RaceRoom, normalmente a partir de la clase utilizada."],
+    ["series", "Categorías o campeonatos ranked distintos detectados en los resultados públicos de RaceRoom."],
+    ["series combinadas", "Cantidad de campeonatos ranked distintos de RaceRoom reunidos en el periodo seleccionado."],
     ["rating", "Rating oficial de RaceRoom que representa el nivel competitivo. GridScope muestra los valores antes y después de cada carrera y su variación; nunca lo recalcula ni lo modifica."],
+    ["rating medio", "Media del último Rating oficial disponible de cada miembro incluido en el campeonato y periodo seleccionados. No es el promedio de Rating de toda la parrilla de cada carrera."],
     ["rating inicial final", "Primer Rating anterior a una carrera del periodo → último Rating posterior. La diferencia es final − inicial y procede de los resultados públicos de RaceRoom."],
     ["reputation", "Reputation oficial de RaceRoom, normalmente entre 0 y 100, que refleja la conducta en pista. Es distinta de la métrica Limpieza de GridScope."],
     ["reputation inicial final", "Primera Reputation anterior a una carrera del periodo → última Reputation posterior. La diferencia procede directamente de RaceRoom."],
     ["inc", "Incident Points que RaceRoom publica para ese piloto y carrera. Pueden incluir distintos tipos de incidente; GridScope no los interpreta como simples salidas de pista."],
     ["incidentes", "Incident Points publicados por RaceRoom. El valor personal pertenece al piloto; el de parrilla suma todos los participantes mostrados."],
+    ["incidentes medios", "Media de Incident Points por miembro y carrera: suma de los puntos publicados por RaceRoom para los miembros incluidos ÷ total de participaciones puntuables."],
+    ["inc media", "Media de Incident Points por miembro y carrera dentro del periodo seleccionado."],
+    ["inc carrera", "Media de Incident Points por miembro y carrera dentro del periodo seleccionado."],
     ["distancia", "Porcentaje completado = vueltas del piloto ÷ vueltas del ganador × 100. El piloto cuenta como coincidencia desde que toma la salida, pero solo puntúa si alcanza el mínimo configurado."],
     ["gridscore", gridScoreFormulaExplanation("raceroom")],
     ["gridscore medio", `Promedio del GridScore de los pilotos valorados. ${gridRatingExplanation("raceroom")}`],
@@ -1177,7 +1191,7 @@ function renderRivals() {
   const ownerRaces = raceAnalysis.races.filter((race) => race.ownerResult);
   progressBody.innerHTML = ownerRaces.length
     ? ownerRaces.slice().reverse().map((race) => `
-      <tr>
+      <tr data-progress-race-id="${race.id}" tabindex="0" role="button" aria-label="Abrir carrera en ${escapeHtml(race.track)}">
         <td><strong>${escapeHtml(race.track)}</strong><small class="table-subline">S${race.week} · ${formatRaceDate(race.startTime)}</small></td>
         <td class="numeric">${formatInteger(race.strengthOfField)}</td>
         <td class="numeric">${race.splitNumber || "—"}${race.splitTotal ? ` / ${race.splitTotal}` : ""}</td>
@@ -1221,6 +1235,12 @@ function renderRivals() {
 function openRivalDetail(iracingId) {
   const rival = rivalAnalysis.rivals.find((item) => item.iracingId === String(iracingId));
   if (!rival) return;
+  const platform = rivalAnalysis.platform || appState.settings.platform || appState.league.platform;
+  const isAssetto = platform === "assetto-corsa";
+  const isRaceRoom = platform === "raceroom";
+  const hasStartingPositions = rival.meetingDetails.some(
+    (meeting) => meeting.ownerStartPosition != null || meeting.rivalStartPosition != null
+  );
   rivalDetailDialog.dataset.rivalId = rival.iracingId;
   document.querySelector("#rivalDetailTitle").textContent = rival.name;
   document.querySelector("#rivalDetailContent").innerHTML = `
@@ -1230,15 +1250,19 @@ function openRivalDetail(iracingId) {
       <article><small>Rival delante</small><strong class="comparison-loss">${rival.rivalAhead}</strong></article>
       <article><small>% por delante</small><strong>${formatDecimal(rival.winRate)}%</strong></article>
       <article><small>Ventaja media</small><strong>${formatSigned(rival.averagePositionAdvantage, " pos.")}</strong></article>
-      <article><small>Incidentes</small><strong>${formatDecimal(rival.averageOwnerIncidents)}x / ${formatDecimal(rival.averageRivalIncidents)}x</strong></article>
+      <article><small>${metricHelp("Incidentes medios", isRaceRoom ? "Media de Incident Points por carrera. El primer valor corresponde a tu piloto y el segundo al rival." : isAssetto ? "Media del contador de incidentes guardado por Content Manager. El primer valor corresponde a tu piloto y el segundo al rival." : "Media de incidentes oficiales por carrera. El primer valor corresponde a tu piloto y el segundo al rival.")}</small><strong>${formatDecimal(rival.averageOwnerIncidents)}x / ${formatDecimal(rival.averageRivalIncidents)}x</strong><span>tú / rival</span></article>
     </div>
+    ${!hasStartingPositions && isAssetto ? '<div class="driver-detail-explainer"><strong>Posiciones de salida no disponibles:</strong> Content Manager no las guardó en estas carreras, por lo que GridScope omite esas columnas.</div>' : ""}
     <div class="table-wrap rival-meetings-wrap">
       <table class="rival-meetings-table">
         <thead>
           <tr>
-            <th>Carrera</th><th class="numeric">SoF</th><th class="numeric">Split</th>
-            <th class="numeric">Tu salida</th><th class="numeric">Tu meta</th>
-            <th class="numeric">Salida rival</th><th class="numeric">Meta rival</th>
+            <th>Carrera</th>
+            ${isAssetto || isRaceRoom ? `<th class="numeric">${metricHelp("Parrilla", "Número total de pilotos incluidos en el resultado de esta carrera.")}</th>` : '<th class="numeric">SoF</th><th class="numeric">Split</th>'}
+            ${hasStartingPositions ? '<th class="numeric">Tu salida</th>' : ""}<th class="numeric">Tu meta</th>
+            ${hasStartingPositions ? '<th class="numeric">Salida rival</th>' : ""}<th class="numeric">Meta rival</th>
+            ${isAssetto ? '<th class="numeric">Tu mejor vuelta</th><th class="numeric">Mejor vuelta rival</th>' : ""}
+            ${isRaceRoom ? '<th class="numeric">Tu distancia</th><th class="numeric">Distancia rival</th>' : ""}
             <th>Resultado</th><th class="numeric">Incidentes</th><th></th>
           </tr>
         </thead>
@@ -1249,14 +1273,18 @@ function openRivalDetail(iracingId) {
             return `
               <tr data-shared-race-id="${meeting.eventId}" tabindex="0" role="button" aria-label="Abrir carrera compartida en ${escapeHtml(meeting.track)}">
                 <td><strong>${escapeHtml(meeting.track)}</strong><small class="table-subline">S${meeting.week} · ${escapeHtml(meeting.layout || "")} · ${formatRaceDate(meeting.startTime)}</small></td>
-                <td class="numeric">${formatInteger(meeting.strengthOfField)}</td>
-                <td class="numeric">${meeting.splitNumber || "—"}${meeting.splitTotal ? ` / ${meeting.splitTotal}` : ""}</td>
-                <td class="numeric">${meeting.ownerStartPosition ?? "—"}</td>
+                ${isAssetto || isRaceRoom
+                  ? `<td class="numeric">${formatInteger(meeting.fieldSize)}</td>`
+                  : `<td class="numeric">${formatInteger(meeting.strengthOfField)}</td>
+                     <td class="numeric">${meeting.splitNumber || "—"}${meeting.splitTotal ? ` / ${meeting.splitTotal}` : ""}</td>`}
+                ${hasStartingPositions ? `<td class="numeric">${meeting.ownerStartPosition ?? "—"}</td>` : ""}
                 <td class="numeric metric-strong">P${meeting.ownerPosition}</td>
-                <td class="numeric">${meeting.rivalStartPosition ?? "—"}</td>
+                ${hasStartingPositions ? `<td class="numeric">${meeting.rivalStartPosition ?? "—"}</td>` : ""}
                 <td class="numeric">P${meeting.rivalPosition}</td>
+                ${isAssetto ? `<td class="numeric">${formatLapTime(meeting.ownerBestLapTime)}</td><td class="numeric">${formatLapTime(meeting.rivalBestLapTime)}</td>` : ""}
+                ${isRaceRoom ? `<td class="numeric">${meeting.ownerDistancePercent == null ? "—" : `${formatDecimal(meeting.ownerDistancePercent)}%`}</td><td class="numeric">${meeting.rivalDistancePercent == null ? "—" : `${formatDecimal(meeting.rivalDistancePercent)}%`}</td>` : ""}
                 <td><span class="head-to-head-result ${ownerWon ? "won" : rivalWon ? "lost" : "tied"}">${ownerWon ? "Terminaste delante" : rivalWon ? "Terminó delante" : "Empate"}</span></td>
-                <td class="numeric">${meeting.ownerIncidents}x / ${meeting.rivalIncidents}x</td>
+                <td class="numeric">${meeting.ownerIncidents}x / ${meeting.rivalIncidents}x <small>tú / rival</small></td>
                 <td><button class="text-button open-shared-race" type="button" data-shared-race-id="${meeting.eventId}">Abrir carrera</button></td>
               </tr>`;
           }).join("")}
@@ -1276,15 +1304,15 @@ function miniLeaguePeriodsFor(scope) {
   }
   const periods = miniLeagueAnalysis.periods?.[scope];
   if (Array.isArray(periods) && periods.length) {
-    return scope === "monthly"
-      ? periods.filter((period) => Number(period.summary?.races || 0) > 0)
-      : periods;
+    return scope === "eternal"
+      ? periods
+      : periods.filter((period) => Number(period.summary?.races || 0) > 0);
   }
   const legacyLeague = miniLeagueAnalysis.leagues?.[scope];
   if (
     legacyLeague
     && (
-      scope !== "monthly"
+      scope === "eternal"
       || Number(legacyLeague.summary?.races || 0) > 0
     )
   ) {
@@ -1342,6 +1370,14 @@ function renderMiniPeriodComparison(league) {
       ? rated.reduce((total, participant) => total + participant.gridRating.gridScore, 0) / rated.length
       : 0;
   };
+  const averageOfficialRating = (period) => {
+    const rated = (period.participants || []).filter(
+      (participant) => participant.iratingEnd != null
+    );
+    return rated.length
+      ? rated.reduce((total, participant) => total + Number(participant.iratingEnd), 0) / rated.length
+      : 0;
+  };
   const comparisonMetric = (
     label,
     value,
@@ -1380,8 +1416,10 @@ function renderMiniPeriodComparison(league) {
     ${comparisonMetric("Recurrentes", current.recurrentRivals, prior.recurrentRivals, { unit: ["rival", "rivales"] })}
     ${isAssetto
       ? comparisonMetric("GridScore medio", averageGridScore(league), averageGridScore(previous), { decimals: 2, unit: ["punto", "puntos"] })
-      : comparisonMetric("SoF medio", current.averageSof, prior.averageSof, { unit: ["punto", "puntos"] })}
-    ${comparisonMetric(isAssetto ? "Incidentes medios" : "Inc. media", current.averageIncidents, prior.averageIncidents, { decimals: 2, suffix: "x" })}
+      : isRaceRoom
+        ? comparisonMetric("Rating medio", averageOfficialRating(league), averageOfficialRating(previous), { decimals: 2, unit: ["punto", "puntos"] })
+        : comparisonMetric("SoF medio", current.averageSof, prior.averageSof, { unit: ["punto", "puntos"] })}
+    ${comparisonMetric(isAssetto || isRaceRoom ? "Incidentes medios" : "Inc. media", current.averageIncidents, prior.averageIncidents, { decimals: 2, suffix: "x" })}
   `;
 }
 
@@ -1405,7 +1443,7 @@ function renderMiniLeagues() {
   if (!isAssetto && miniLeagueSort.key === "cleanlinessScore") miniLeagueSort.key = "safetyRatingEnd";
   const scopes = [
     ["yearly", "Anual", "Clasificación por año"],
-    ["season", "Temporada", "Clasificación por season"],
+    ["season", isRaceRoom ? "Campeonato" : "Temporada", isRaceRoom ? "Clasificación por serie ranked y año" : "Clasificación por season"],
     ["monthly", "Mensual", "Clasificación por mes"],
     ["eternal", "Eterna", "Todo el historial"]
   ];
@@ -1481,6 +1519,15 @@ function renderMiniLeagues() {
         0
       ) / ratedParticipants.length
     : null;
+  const officialRatingParticipants = league.participants.filter(
+    (participant) => participant.iratingEnd != null
+  );
+  const averageOfficialRating = officialRatingParticipants.length
+    ? officialRatingParticipants.reduce(
+        (total, participant) => total + Number(participant.iratingEnd),
+        0
+      ) / officialRatingParticipants.length
+    : null;
   document.querySelector("#miniLeagueMinimumRaces").value = miniLeagueMinimumRaces;
   document.querySelector("#miniLeagueMinimumRaces").disabled = isCustom;
   document.querySelector("#miniLeagueMinimumHelp").textContent =
@@ -1488,7 +1535,12 @@ function renderMiniLeagues() {
   const weightingExplanation = league.rankingMode === "weekly"
     ? "Primero se calcula la media de cada semana y después la media general, de modo que todas las semanas pesan lo mismo."
     : "Cada carrera puntuable pesa lo mismo en la media general.";
-  document.querySelector("#miniLeagueCalculationHelp").textContent = `${isCustom ? "Este campeonato utiliza únicamente las series, fechas y pilotos configurados. " : ""}Una carrera puntúa cuando coinciden al menos dos miembros. El mejor clasificado entre ellos recibe 100 puntos, el último 0 y el resto una cantidad proporcional. ${weightingExplanation} Cada pareja de miembros genera además un duelo.${isAssetto ? " Los datos proceden de los JSON de Content Manager." : " iRating, SR y SoF conservan sus valores oficiales."}`;
+  const platformCalculationNote = isAssetto
+    ? " Los resultados proceden del historial JSON de Content Manager; GridScore y Limpieza son métricas propias de GridScope."
+    : isRaceRoom
+      ? " Rating, Reputation e Incident Points proceden de RaceRoom. GridScore y Limpieza son métricas independientes de GridScope; RaceRoom no aporta iRating, Safety Rating ni SoF."
+      : " iRating, Safety Rating y SoF conservan los valores oficiales incluidos en los resultados de iRacing.";
+  document.querySelector("#miniLeagueCalculationHelp").textContent = `${isCustom ? "Este campeonato utiliza únicamente las series, fechas y pilotos configurados. " : ""}Una carrera puntúa cuando coinciden al menos dos miembros. El mejor clasificado entre ellos recibe 100 puntos, el último 0 y el resto una cantidad proporcional. ${weightingExplanation} Cada pareja de miembros genera además un duelo.${platformCalculationNote}`;
   document.querySelector("#miniLeaguePeriod").textContent = league.label;
   document.querySelector("#miniLeagueRankingTitle").textContent =
     isCustom ? "Clasificación del campeonato" : "Clasificación de recurrentes";
@@ -1496,11 +1548,11 @@ function renderMiniLeagues() {
     <article><small>Carreras puntuables</small><strong>${summary.races || 0}</strong><span>con miembros coincidentes</span></article>
     <article><small>Participantes</small><strong>${summary.participants || 0}</strong><span>${classification.classified.length} cumplen el mínimo</span></article>
     <article><small>${isCustom ? "Rivales incluidos" : "Rivales recurrentes"}</small><strong>${summary.recurrentRivals || 0}</strong><span>${isCustom ? "según la configuración" : "mínimo dos coincidencias"}</span></article>
-    <article><small>Series combinadas</small><strong>${summary.series || 0}</strong><span>${isAssetto ? "campeonatos o servidores distintos" : "campeonatos oficiales distintos"}</span></article>
+    <article><small>Series combinadas</small><strong>${summary.series || 0}</strong><span>${isAssetto ? "campeonatos o servidores distintos" : isRaceRoom ? "campeonatos ranked distintos" : "campeonatos oficiales distintos"}</span></article>
     <article><small>Circuitos</small><strong>${summary.tracks || 0}</strong><span>configuraciones diferentes</span></article>
     <article><small>Duelos disputados</small><strong>${formatInteger(summary.duels || 0)}</strong><span>comparaciones entre miembros</span></article>
     <article><small>Miembros por carrera</small><strong>${formatDecimal(summary.averageMembers || 0)}</strong><span>participación media puntuable</span></article>
-    <article><small>${isAssetto ? "GridScore medio" : "SoF medio"}</small><strong>${isAssetto ? averageGridScore == null ? "—" : formatDecimal(averageGridScore) : summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>${isAssetto ? "media de los miembros valorados" : "nivel de las parrillas"}</span></article>
+    <article><small>${isAssetto ? "GridScore medio" : isRaceRoom ? "Rating medio" : "SoF medio"}</small><strong>${isAssetto ? averageGridScore == null ? "—" : formatDecimal(averageGridScore) : isRaceRoom ? averageOfficialRating == null ? "—" : formatDecimal(averageOfficialRating) : summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>${isAssetto ? "media de los miembros valorados" : isRaceRoom ? "media del Rating final disponible" : "nivel de las parrillas"}</span></article>
     <article><small>Incidentes medios</small><strong>${formatDecimal(summary.averageIncidents || 0)}x</strong><span>por miembro y carrera</span></article>
     <article><small>Referencia</small><strong>${ownerOfficialPosition ? `P${ownerOfficialPosition}` : "Provisional"}</strong><span>${leader ? `líder: ${escapeHtml(leader.name)}` : "sin pilotos clasificados"}</span></article>
   `;
@@ -1584,7 +1636,7 @@ function renderMiniLeagues() {
         <span class="mini-event-date">${formatRaceDate(race.startTime)}</span>
         <span class="mini-event-main"><strong>${escapeHtml(race.track)}</strong><small>${escapeHtml(race.seriesName)} · ${escapeHtml(race.layout || "Trazado principal")}</small></span>
         <span><small>Miembros</small><strong>${race.participants}</strong></span>
-        <span><small>${isAssetto ? "Parrilla" : "SoF"}</small><strong>${isAssetto ? formatInteger(race.fieldSize || race.participants) : formatInteger(race.strengthOfField)}</strong></span>
+        <span><small>${isAssetto || isRaceRoom ? "Parrilla" : "SoF"}</small><strong>${isAssetto || isRaceRoom ? formatInteger(race.fieldSize || race.participants) : formatInteger(race.strengthOfField)}</strong></span>
         <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
       </button>`).join("")
     : `<article class="empty-archive"><h3>Sin carreras puntuables</h3><p>${isCustom ? "Revisa las series, las fechas y los pilotos seleccionados." : "Se necesitan al menos dos coincidencias con un mismo rival."}</p></article>`;
@@ -1748,14 +1800,14 @@ function openMiniLeagueDriverDetail(iracingId) {
       <article><small>${metricHelp("Índice", "En cada carrera, entre los miembros presentes, el primero recibe 100 puntos, el último 0 y el resto una puntuación proporcional a su puesto. El Índice es la media de esas puntuaciones y cada carrera pesa lo mismo.")}</small><strong>${formatDecimal(participant.score)}</strong><span>media normalizada</span></article>
       <article><small>${metricHelp("Carreras", raceCountExplanation())}</small><strong>${participant.races}</strong><span>${participant.seriesCount} series</span></article>
       <article><small>${metricHelp("Duelos", duelExplanation())}</small><strong>${participant.wins}-${participant.losses}</strong><span>${formatDecimal(participant.duelWinRate)}% ganado</span></article>
-      <article><small>${metricHelp("Incidentes", isAssetto ? personalContactExplanation("assetto-corsa") : "Suma de puntos de incidente de todas las carreras puntuables. Debajo aparece el total dividido entre el número de carreras.")}</small><strong>${participant.incidents}x</strong><span>${formatDecimal(participant.averageIncidents)}x/carrera</span></article>
+      <article><small>${metricHelp("Incidentes", isAssetto ? personalContactExplanation("assetto-corsa") : isRaceRoom ? "Suma de los Incident Points que RaceRoom publica para este piloto en las carreras puntuables del periodo. Debajo aparece el total dividido entre esas carreras." : "Suma de puntos de incidente de todas las carreras puntuables. Debajo aparece el total dividido entre el número de carreras.")}</small><strong>${participant.incidents}x</strong><span>${formatDecimal(participant.averageIncidents)}x/carrera</span></article>
       <article><small>${metricHelp("Posiciones", "Suma de las posiciones ganadas o perdidas entre la salida y la meta en todas las carreras del periodo.")}</small><strong>${formatSigned(participant.positionsGained)}</strong><span>ganadas en pista</span></article>
       <article><small>${metricHelp("Frente al piloto de referencia", "Cara a cara exclusivamente contra el piloto configurado como referencia. El primer número indica sus resultados por delante y el segundo, los del rival.")}</small><strong>${participant.isOwner ? "Referencia" : `${participant.ownerAhead}-${participant.rivalAhead}`}</strong><span>cara a cara</span></article>
     </div>
     <div class="driver-detail-explainer"><strong>Series compartidas:</strong> ${participant.seriesNames.map(escapeHtml).join(" · ")}</div>
     <div class="table-wrap season-driver-races-wrap">
       <table class="session-driver-races-table mini-driver-races-table">
-        <thead><tr><th>Carrera</th><th>Serie</th><th class="numeric">Posición interna</th><th class="numeric">Posición en carrera</th><th class="numeric">Índice</th>${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : '<th class="numeric">SoF</th>'}<th class="numeric">Inc.</th><th class="numeric">Frente a ti</th><th></th></tr></thead>
+        <thead><tr><th>Carrera</th><th>Serie</th><th class="numeric">Posición interna</th><th class="numeric">Posición en carrera</th><th class="numeric">Índice</th>${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : isRaceRoom ? '<th class="numeric">Rating</th><th class="numeric">Reputation</th>' : '<th class="numeric">SoF</th>'}<th class="numeric">Inc.</th><th class="numeric">Frente a ti</th><th></th></tr></thead>
         <tbody>
           ${participant.raceDetails.map((race) => `
             <tr data-driver-race-id="${race.eventId}" tabindex="0" role="button">
@@ -1764,7 +1816,7 @@ function openMiniLeagueDriverDetail(iracingId) {
               <td class="numeric metric-strong">P${race.leaguePosition} / ${race.leagueParticipants}</td>
               <td class="numeric">P${race.finishPosition}</td>
               <td class="numeric mini-score">${formatDecimal(race.score)}</td>
-              ${isAssetto ? `<td class="numeric">${gridScoreMarkup(race)}</td><td class="numeric">${cleanlinessMarkup(race)}</td>` : `<td class="numeric">${formatInteger(race.strengthOfField)}</td>`}
+              ${isAssetto ? `<td class="numeric">${gridScoreMarkup(race)}</td><td class="numeric">${cleanlinessMarkup(race)}</td>` : isRaceRoom ? `<td class="numeric">${race.rating == null ? "—" : formatDecimal(race.rating)}</td><td class="numeric">${race.reputation == null ? "—" : formatDecimal(race.reputation)}</td>` : `<td class="numeric">${formatInteger(race.strengthOfField)}</td>`}
               <td class="numeric">${race.incidents}x</td>
               <td class="numeric">${participant.isOwner ? "Referencia" : race.ownerPosition == null ? "—" : `P${race.finishPosition} / tú P${race.ownerPosition}`}</td>
               <td><button class="text-button" type="button" data-driver-race-id="${race.eventId}">Abrir</button></td>
@@ -1826,8 +1878,9 @@ async function openSessionDetail(week) {
     const detail = await apiRequest(`/api/sessions/${week}`);
     currentSessionDetail = detail;
     const session = detail.session;
-    const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
-    const isRaceRoom = (appState.settings.platform || appState.league.platform) === "raceroom";
+    const platform = appState.settings.platform || appState.league.platform;
+    const isAssetto = platform === "assetto-corsa";
+    const isRaceRoom = platform === "raceroom";
     const repeated = detail.drivers.filter((driver) => driver.repeated);
     const ownerSessionDriver = detail.drivers.find((driver) => driver.isOwner);
     document.querySelector("#sessionDetailKicker").textContent =
@@ -1845,7 +1898,7 @@ async function openSessionDetail(week) {
         <article><small>Recurrentes</small><strong>${session.repeatedDrivers}</strong></article>
         <article><small>${isAssetto ? "Tu GridScore" : isRaceRoom ? "Tu Rating" : "SoF medio"}</small><strong>${isAssetto ? ownerSessionDriver?.gridRating ? formatDecimal(ownerSessionDriver.gridRating.gridScore) : "—" : isRaceRoom ? ownerSessionDriver?.iratingEnd == null ? "—" : formatInteger(ownerSessionDriver.iratingEnd) : session.averageSof ? formatInteger(session.averageSof) : "—"}</strong></article>
         ${isAssetto ? "" : `<article><small>${metricHelp("Tu GridScore", gridRatingExplanation())}</small><strong>${ownerSessionDriver?.gridRating ? formatDecimal(ownerSessionDriver.gridRating.gridScore) : "—"}</strong></article>`}
-        <article><small>${metricHelp("Incidentes de parrilla", fieldContactExplanation(isAssetto ? "assetto-corsa" : "iracing", "esta semana"))}</small><strong>${formatInteger(session.totalIncidents)}x</strong></article>
+        <article><small>${metricHelp("Incidentes de parrilla", fieldContactExplanation(isAssetto ? "assetto-corsa" : isRaceRoom ? "raceroom" : "iracing", "esta semana"))}</small><strong>${formatInteger(session.totalIncidents)}x</strong></article>
         <article><small>Tus carreras</small><strong>${session.ownerRaces}</strong></article>
       </div>
 
@@ -1899,7 +1952,7 @@ async function openSessionDetail(week) {
             <thead>
               <tr>
                 <th>Piloto</th><th class="numeric">Carreras</th>
-                <th class="numeric rating-column">${isAssetto ? "GridScore" : "iRating inicial → final"}</th><th class="numeric rating-column">${isAssetto ? "Limpieza" : "SR inicial → final"}</th>
+                <th class="numeric rating-column">${isAssetto ? "GridScore" : isRaceRoom ? "Rating inicial → final" : "iRating inicial → final"}</th><th class="numeric rating-column">${isAssetto ? "Limpieza" : isRaceRoom ? "Reputation inicial → final" : "SR inicial → final"}</th>
                 ${isAssetto ? "" : `<th class="numeric rating-column">${metricHelp("GridScore", gridRatingExplanation())}</th><th class="numeric rating-column">${metricHelp("Limpieza", cleanlinessRatingExplanation())}</th>`}
                 <th class="numeric">Meta media</th>
                 <th class="numeric">Mejor</th><th class="numeric">Salida media</th><th class="numeric">± Pos.</th>
@@ -2003,10 +2056,10 @@ function openSessionDriverDetail(iracingId) {
       <table class="session-driver-races-table">
         <thead>
           <tr>
-            <th>Carrera</th>${isAssetto ? "" : '<th class="numeric">SoF</th><th class="numeric">Split</th>'}
+            <th>Carrera</th>${isAssetto || isRaceRoom ? "" : '<th class="numeric">SoF</th><th class="numeric">Split</th>'}
             <th class="numeric">Salida</th><th class="numeric">Meta</th><th class="numeric">± Pos.</th>
             <th class="numeric">Inc.</th><th class="numeric">Vueltas</th><th class="numeric">Mejor vuelta</th>
-            ${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : `<th class="numeric">iRating</th><th class="numeric">SR</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>`}<th>Comparación</th><th></th>
+            ${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : `<th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>`}<th>Comparación</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -2021,7 +2074,7 @@ function openSessionDriverDetail(iracingId) {
             return `
               <tr data-driver-race-id="${race.eventId}" tabindex="0" role="button" aria-label="Abrir carrera en ${escapeHtml(race.track)}">
                 <td><strong>${escapeHtml(race.track)}</strong><small class="table-subline">${escapeHtml(race.layout || "Trazado principal")} · ${formatRaceDate(race.startTime)}</small></td>
-                ${isAssetto ? "" : `<td class="numeric">${formatInteger(race.strengthOfField)}</td>
+                ${isAssetto || isRaceRoom ? "" : `<td class="numeric">${formatInteger(race.strengthOfField)}</td>
                 <td class="numeric">${race.splitNumber || "—"}${race.splitTotal ? ` / ${race.splitTotal}` : ""}</td>`}
                 <td class="numeric">${race.startPosition ?? "—"}</td>
                 <td class="numeric metric-strong">P${race.finishPosition}</td>
@@ -2067,7 +2120,9 @@ async function openSeasonDriverDetail(iracingId, scope = "active") {
     );
     const driver = detail.driver;
     const summary = detail.summary;
-    const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+    const platform = appState.settings.platform || appState.league.platform;
+    const isAssetto = platform === "assetto-corsa";
+    const isRaceRoom = platform === "raceroom";
     const isGlobal = detail.scope === "global";
     const gridRating = summary.gridRating;
     sessionDriverDialog.dataset.driverId = driver.iracingId;
@@ -2100,19 +2155,17 @@ async function openSeasonDriverDetail(iracingId, scope = "active") {
       </div>
       <div class="assetto-rating-explainer">
         <strong>Índice propio de GridScope · no es una valoración oficial</strong>
-        <span>${isAssetto
-          ? "Resultado 40% · progreso 15% · ritmo 15% · consistencia 10% · carrera completada 10% · rivales recurrentes 10%."
-          : "Resultado 35% · progreso 15% · ritmo 15% · carrera completada 10% · rivales recurrentes 10% · dificultad SoF 15%."} Después, GridScore combina 75% rendimiento y 25% limpieza.</span>
+        <span>${gridScoreFormulaExplanation(platform)}</span>
         <em>${metricHelp("Confianza", confidenceExplanation())} ${gridRating.confidence} · ${gridRating.ratedRaces} carreras · ${formatInteger(Math.round(gridRating.drivingMinutes))} min analizados</em>
       </div>` : ""}${isAssetto ? "" : `<div class="driver-rating-highlights">
         <article class="irating-highlight">
-          <div><small>iRating actual</small><strong>${summary.iratingEnd == null ? "—" : formatInteger(summary.iratingEnd)}</strong></div>
+          <div><small>${isRaceRoom ? "Rating actual" : "iRating actual"}</small><strong>${summary.iratingEnd == null ? "—" : formatInteger(summary.iratingEnd)}</strong></div>
           <span class="${Number(summary.iratingChange) > 0 ? "positive" : Number(summary.iratingChange) < 0 ? "negative" : "neutral"}">
             ${summary.iratingEnd == null ? "No disponible" : `${summary.iratingStart == null ? "—" : formatInteger(summary.iratingStart)} → ${formatInteger(summary.iratingEnd)} · ${formatSigned(summary.iratingChange)}`}
           </span>
         </article>
         <article class="safety-highlight">
-          <div><small>Safety Rating actual</small><strong>${summary.safetyRatingEnd == null ? "—" : formatDecimal(summary.safetyRatingEnd)}</strong></div>
+          <div><small>${isRaceRoom ? "Reputation actual" : "Safety Rating actual"}</small><strong>${summary.safetyRatingEnd == null ? "—" : formatDecimal(summary.safetyRatingEnd)}</strong></div>
           <span class="${Number(summary.safetyRatingChange) > 0 ? "positive" : Number(summary.safetyRatingChange) < 0 ? "negative" : "neutral"}">
             ${summary.safetyRatingEnd == null ? "No disponible" : `${summary.safetyRatingStart == null ? "—" : formatDecimal(summary.safetyRatingStart)} → ${formatDecimal(summary.safetyRatingEnd)} · ${formatSigned(summary.safetyRatingChange)}`}
           </span>
@@ -2126,7 +2179,7 @@ async function openSeasonDriverDetail(iracingId, scope = "active") {
         <article><small>Incidentes</small><strong>${summary.totalIncidents}x</strong><span>${formatDecimal(summary.averageIncidents)}x por carrera</span></article>
         <article><small>Vueltas</small><strong>${formatInteger(summary.lapsComplete)}</strong><span>${summary.lapsLed} lideradas</span></article>
         <article><small>Mejor vuelta</small><strong>${formatLapTime(summary.bestLapTime)}</strong><span>mejor registro de la temporada</span></article>
-        ${isAssetto ? `<article><small>Circuitos</small><strong>${detail.tracks.length}</strong><span>trazados diferentes</span></article>` : `<article><small>SoF medio</small><strong>${summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>nivel de las parrillas</span></article>`}
+        ${isAssetto || isRaceRoom ? `<article><small>Circuitos</small><strong>${detail.tracks.length}</strong><span>trazados diferentes</span></article>` : `<article><small>SoF medio</small><strong>${summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>nivel de las parrillas</span></article>`}
         <article><small>Frente a ti</small><strong>${driver.isOwner ? "Referencia" : summary.meetingsWithOwner ? `${summary.ownerAhead}-${summary.rivalAhead}` : "—"}</strong><span>${driver.isOwner ? "Tu piloto configurado" : `${summary.meetingsWithOwner} coincidencias`}</span></article>
       </div>
 
@@ -2163,7 +2216,7 @@ async function openSeasonDriverDetail(iracingId, scope = "active") {
                 <div><dt>Media</dt><dd>P${formatDecimal(track.averageFinish)}</dd></div>
                 <div><dt>Mejor</dt><dd>P${track.bestFinish}</dd></div>
                 <div><dt>Inc.</dt><dd>${formatDecimal(track.averageIncidents)}x</dd></div>
-                ${isAssetto ? "" : `<div><dt>SoF</dt><dd>${track.averageSof ? formatInteger(track.averageSof) : "—"}</dd></div>`}
+                ${isAssetto || isRaceRoom ? "" : `<div><dt>SoF</dt><dd>${track.averageSof ? formatInteger(track.averageSof) : "—"}</dd></div>`}
                 <div><dt>GridScore</dt><dd>${track.averageGridScore == null ? "—" : formatDecimal(track.averageGridScore)}</dd></div>
               </dl>
             </article>`).join("")}
@@ -2180,10 +2233,10 @@ async function openSeasonDriverDetail(iracingId, scope = "active") {
             <thead>
               <tr>
                 ${isGlobal ? "<th>Serie / temporada</th><th>Sesión</th>" : ""}
-                <th>Carrera</th>${isAssetto ? "" : '<th class="numeric">SoF</th><th class="numeric">Split</th>'}
+                <th>Carrera</th>${isAssetto || isRaceRoom ? "" : '<th class="numeric">SoF</th><th class="numeric">Split</th>'}
                 <th class="numeric">Salida</th><th class="numeric">Meta</th><th class="numeric">± Pos.</th>
                 <th class="numeric">Inc.</th><th class="numeric">Vueltas</th><th class="numeric">Lideradas</th>
-                <th class="numeric">Mejor vuelta</th>${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : `<th class="numeric">iRating</th><th class="numeric">SR</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>`}
+                <th class="numeric">Mejor vuelta</th>${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : `<th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>`}
                 <th>Frente a ti</th><th></th>
               </tr>
             </thead>
@@ -2201,7 +2254,7 @@ async function openSeasonDriverDetail(iracingId, scope = "active") {
                     ${isGlobal ? `<td><strong>${escapeHtml(race.seriesName)}</strong><small class="table-subline">${escapeHtml(shortSeason(race.season))}</small></td>
                     <td><strong>Semana ${race.week}</strong><small class="table-subline">${formatRaceDate(race.startTime)}</small></td>` : ""}
                     <td><strong>${escapeHtml(race.track)}</strong><small class="table-subline">${isGlobal ? "" : `S${race.week} · `}${escapeHtml(race.layout || "Trazado principal")}${isGlobal ? "" : ` · ${formatRaceDate(race.startTime)}`}</small></td>
-                    ${isAssetto ? "" : `<td class="numeric">${formatInteger(race.strengthOfField)}</td>
+                    ${isAssetto || isRaceRoom ? "" : `<td class="numeric">${formatInteger(race.strengthOfField)}</td>
                     <td class="numeric">${race.splitNumber || "—"}${race.splitTotal ? ` / ${race.splitTotal}` : ""}</td>`}
                     <td class="numeric">${race.startPosition ?? "—"}</td>
                     <td class="numeric metric-strong">P${race.finishPosition}</td>
@@ -2311,8 +2364,8 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
           ["Telemetría", event.telemetryFiles?.length ? "Disponible" : "—"],
           ...(summary.ownerResult?.gridScore != null
             ? [
-                [metricHelp("Tu GridScore", gridScoreFormulaExplanation("iracing")), formatDecimal(summary.ownerResult.gridScore)],
-                [metricHelp("Tu limpieza", cleanlinessFormulaExplanation("iracing")), formatDecimal(summary.ownerResult.cleanlinessScore)]
+                [metricHelp("Tu GridScore", gridScoreFormulaExplanation(isRaceRoom ? "raceroom" : "iracing")), formatDecimal(summary.ownerResult.gridScore)],
+                [metricHelp("Tu limpieza", cleanlinessFormulaExplanation(isRaceRoom ? "raceroom" : "iracing")), formatDecimal(summary.ownerResult.cleanlinessScore)]
               ]
             : []),
           ];
@@ -2347,7 +2400,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
             <tr>
               <th>Pos.</th><th>Piloto</th><th class="numeric">Salida</th><th class="numeric">± Pos.</th>
               <th class="numeric">Inc.</th><th class="numeric">Vueltas</th>${isAssetto ? '<th class="numeric">Válidas</th>' : '<th class="numeric">Lideradas</th>'}
-              <th class="numeric">Mejor vuelta</th><th class="numeric">Media</th>${isAssetto ? `<th class="numeric">Consistencia</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("assetto-corsa"))}</th><th>Neumáticos</th><th>Coche</th>` : `<th class="numeric">Intervalo</th><th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("iracing"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("iracing"))}</th><th class="numeric">Puntos</th>`}<th>Estado</th>
+              <th class="numeric">Mejor vuelta</th><th class="numeric">Media</th>${isAssetto ? `<th class="numeric">Consistencia</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("assetto-corsa"))}</th><th>Neumáticos</th><th>Coche</th>` : `<th class="numeric">Intervalo</th><th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation(isRaceRoom ? "raceroom" : "iracing"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation(isRaceRoom ? "raceroom" : "iracing"))}</th><th class="numeric">Puntos</th>`}<th>Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -2577,7 +2630,7 @@ function renderOwnerSeasonOverview() {
   const isRaceRoom = platform === "raceroom";
   const racesHead = document.querySelector(".owner-season-races-table thead");
   racesHead.innerHTML = `<tr>
-    <th>Carrera</th>${isAssetto ? "" : '<th class="numeric">Split</th><th class="numeric">SoF</th>'}
+    <th>Carrera</th>${isAssetto || isRaceRoom ? "" : '<th class="numeric">Split</th><th class="numeric">SoF</th>'}
     <th class="numeric">Salida</th><th class="numeric">Meta</th><th class="numeric">± Pos.</th>
     <th class="numeric">Tus inc.</th>
     ${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>` : `<th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation())}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation())}</th>`}<th></th>
@@ -2613,9 +2666,9 @@ function renderOwnerSeasonOverview() {
     <article><small>Posición media</small><strong>P${formatDecimal(summary.averageFinish)}</strong><span>mejor P${summary.bestFinish} · peor P${summary.worstFinish}</span></article>
     <article><small>Top 5 / Top 10</small><strong>${summary.topFive} / ${summary.topTen}</strong><span>${summary.wins} victoria${summary.wins === 1 ? "" : "s"}</span></article>
     <article><small>Salida media</small><strong>${summary.averageStart == null ? "—" : `P${formatDecimal(summary.averageStart)}`}</strong><span>${formatSigned(summary.positionsGained, " posiciones")}</span></article>
-    <article><small>${metricHelp("Tus incidentes", personalContactExplanation(isAssetto ? "assetto-corsa" : "iracing"))}</small><strong>${summary.totalIncidents}x</strong><span>${formatDecimal(summary.averageIncidents)}x de media personal por carrera</span></article>
+    <article><small>${metricHelp("Tus incidentes", personalContactExplanation(platform))}</small><strong>${summary.totalIncidents}x</strong><span>${formatDecimal(summary.averageIncidents)}x de media personal por carrera</span></article>
     <article><small>Vueltas</small><strong>${formatInteger(summary.lapsComplete)}</strong><span>${formatInteger(summary.lapsLed)} lideradas</span></article>
-    <article><small>${isAssetto ? metricHelp("GridScore", gridRatingExplanation()) : "SoF medio"}</small><strong>${isAssetto ? gridRating ? formatDecimal(gridRating.gridScore) : "—" : summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>${isAssetto && gridRating ? `${formatDecimal(gridRating.gridScoreStart)} → ${formatDecimal(gridRating.gridScore)} · ${formatSigned(gridRating.gridScoreChange)}` : isAssetto ? "sin valoración disponible" : "nivel medio de las parrillas"}</span></article>
+    ${isRaceRoom ? "" : `<article><small>${isAssetto ? metricHelp("GridScore", gridRatingExplanation()) : "SoF medio"}</small><strong>${isAssetto ? gridRating ? formatDecimal(gridRating.gridScore) : "—" : summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>${isAssetto && gridRating ? `${formatDecimal(gridRating.gridScoreStart)} → ${formatDecimal(gridRating.gridScore)} · ${formatSigned(gridRating.gridScoreChange)}` : isAssetto ? "sin valoración disponible" : "nivel medio de las parrillas"}</span></article>`}
     <article><small>${isAssetto ? metricHelp("Limpieza", cleanlinessRatingExplanation()) : isRaceRoom ? metricHelp("Rating", "Valor competitivo oficial de RaceRoom. Se muestra el primer valor antes de una carrera, el último valor posterior y la diferencia del periodo.") : "iRating"}</small><strong>${isAssetto ? gridRating ? formatDecimal(gridRating.cleanlinessScore) : "—" : summary.iratingEnd == null ? "—" : formatInteger(summary.iratingEnd)}</strong><span>${isAssetto && gridRating ? `${formatDecimal(gridRating.cleanlinessStart)} → ${formatDecimal(gridRating.cleanlinessScore)} · ${formatSigned(gridRating.cleanlinessChange)}` : isAssetto ? "sin valoración disponible" : summary.iratingStart == null || summary.iratingEnd == null ? "evolución no disponible" : `${formatInteger(summary.iratingStart)} → ${formatInteger(summary.iratingEnd)} · ${formatSigned(summary.iratingChange)}`}</span></article>
     <article><small>${isAssetto ? metricHelp("Confianza", confidenceExplanation()) : isRaceRoom ? metricHelp("Reputation", "Valor oficial de conducta de RaceRoom, normalmente entre 0 y 100. Se muestra la evolución real publicada en los resultados; no es la Limpieza calculada por GridScope.") : "Safety Rating"}</small><strong>${isAssetto ? gridRating?.confidence || "—" : summary.safetyRatingEnd == null ? "—" : formatDecimal(summary.safetyRatingEnd)}</strong><span>${isAssetto && gridRating ? `${gridRating.ratedRaces} carreras · ${formatInteger(Math.round(gridRating.drivingMinutes))} min` : isAssetto ? "sin valoración disponible" : summary.safetyRatingStart == null || summary.safetyRatingEnd == null ? "evolución no disponible" : `${formatDecimal(summary.safetyRatingStart)} → ${formatDecimal(summary.safetyRatingEnd)} · ${formatSigned(summary.safetyRatingChange)}`}</span></article>
     ${isAssetto ? "" : `
@@ -2644,7 +2697,7 @@ function renderOwnerSeasonOverview() {
             <div class="owner-track-card-stats">
               <span><small>Media</small><strong>P${formatDecimal(track.averageFinish)}</strong></span>
               <span><small>± Pos.</small><strong>${formatSigned(track.positionsGained)}</strong></span>
-              <span><small>${isAssetto ? "GridScore" : "SoF"}</small><strong>${isAssetto ? track.averageGridScore == null ? "—" : formatDecimal(track.averageGridScore) : track.averageSof ? formatInteger(track.averageSof) : "—"}</strong></span>
+              <span><small>${isAssetto || isRaceRoom ? "GridScore" : "SoF"}</small><strong>${isAssetto || isRaceRoom ? track.averageGridScore == null ? "—" : formatDecimal(track.averageGridScore) : track.averageSof ? formatInteger(track.averageSof) : "—"}</strong></span>
               <span><small>Inc./carrera</small><strong>${formatDecimal(track.averageIncidents)}x</strong></span>
             </div>
           </button>`).join("")}
@@ -2653,7 +2706,7 @@ function renderOwnerSeasonOverview() {
   races.innerHTML = ownerSeasonAnalysis.races.map((race) => `
     <tr data-owner-season-race="${race.eventId}" tabindex="0" role="button">
       <td><strong>${escapeHtml(race.track)}</strong><small class="table-subline">${formatRaceDate(race.startTime)} · ${escapeHtml(race.layout || "Trazado principal")}</small></td>
-      ${isAssetto ? "" : `<td class="numeric">${race.splitNumber || "—"}${race.splitTotal ? ` / ${race.splitTotal}` : ""}</td>
+      ${isAssetto || isRaceRoom ? "" : `<td class="numeric">${race.splitNumber || "—"}${race.splitTotal ? ` / ${race.splitTotal}` : ""}</td>
       <td class="numeric">${race.strengthOfField ? formatInteger(race.strengthOfField) : "—"}</td>`}
       <td class="numeric">${race.startPosition == null ? "—" : `P${race.startPosition}`}</td>
       <td class="numeric metric-strong">P${race.finishPosition}</td>
@@ -2692,9 +2745,9 @@ function renderOwnerSeasonOverview() {
       <span><small>Salida</small><strong>${latest.startPosition == null ? "—" : `P${latest.startPosition}`}</strong></span>
       <span><small>Meta</small><strong>P${latest.finishPosition}</strong></span>
       <span><small>Tus incidentes</small><strong>${latest.incidents}x</strong></span>
-      <span><small>${isAssetto ? "GridScore" : "SoF"}</small><strong>${isAssetto ? latest.gridScore == null ? "—" : formatDecimal(latest.gridScore) : latest.strengthOfField ? formatInteger(latest.strengthOfField) : "—"}</strong></span>
-      <span><small>${isAssetto ? "Limpieza" : "iRating"}</small><strong>${isAssetto ? latest.cleanlinessScore == null ? "—" : formatDecimal(latest.cleanlinessScore) : latest.newIRating == null ? "—" : `${formatInteger(latest.newIRating)} ${formatSigned(latest.iratingChange)}`}</strong></span>
-      <span><small>${isAssetto ? "Confianza" : "Safety Rating"}</small><strong>${isAssetto ? gridRating?.confidence || "—" : latest.newSafetyRating == null ? "—" : `${formatDecimal(latest.newSafetyRating)} ${formatSigned(latest.safetyRatingChange)}`}</strong></span>
+      <span><small>${isAssetto || isRaceRoom ? "GridScore" : "SoF"}</small><strong>${isAssetto || isRaceRoom ? latest.gridScore == null ? "—" : formatDecimal(latest.gridScore) : latest.strengthOfField ? formatInteger(latest.strengthOfField) : "—"}</strong></span>
+      <span><small>${isAssetto ? "Limpieza" : isRaceRoom ? "Rating" : "iRating"}</small><strong>${isAssetto ? latest.cleanlinessScore == null ? "—" : formatDecimal(latest.cleanlinessScore) : latest.newIRating == null ? "—" : `${formatInteger(latest.newIRating)} ${formatSigned(latest.iratingChange)}`}</strong></span>
+      <span><small>${isAssetto ? "Confianza" : isRaceRoom ? "Reputation" : "Safety Rating"}</small><strong>${isAssetto ? gridRating?.confidence || "—" : latest.newSafetyRating == null ? "—" : `${formatDecimal(latest.newSafetyRating)} ${formatSigned(latest.safetyRatingChange)}`}</strong></span>
       ${isAssetto ? "" : `<span><small>GridScore</small><strong>${latest.gridScore == null ? "—" : formatDecimal(latest.gridScore)}</strong></span>
       <span><small>Limpieza GridScope</small><strong>${latest.cleanlinessScore == null ? "—" : formatDecimal(latest.cleanlinessScore)}</strong></span>`}
     </div>
@@ -2706,6 +2759,8 @@ function openOwnerTrackDetail(trackIndex) {
   const track = ownerSeasonAnalysis?.tracks?.[Number(trackIndex)];
   if (!track) return;
   const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const isRaceRoom = (appState.settings.platform || appState.league.platform) === "raceroom";
+  const scorePlatform = isAssetto ? "assetto-corsa" : isRaceRoom ? "raceroom" : "iracing";
   const trackRaces = ownerSeasonAnalysis.races.filter(
     (race) =>
       race.track === track.track
@@ -2742,10 +2797,10 @@ function openOwnerTrackDetail(trackIndex) {
       <article><small>Vueltas</small><strong>${formatInteger(track.lapsComplete)}</strong><span>${formatInteger(track.validLaps)} válidas · ${formatInteger(track.lapsLed)} lideradas</span></article>
       <article><small>Mejor vuelta</small><strong>${formatLapTime(track.bestLapTime)}</strong><span>media ${formatLapTime(track.averageLapTime)}</span></article>
       ${isAssetto ? `<article><small>Vuelta teórica</small><strong>${formatLapTime(track.theoreticalBestLapTime)}</strong><span>mejores sectores disponibles</span></article>` : ""}
-      <article><small>${metricHelp("GridScore medio", gridScoreFormulaExplanation(isAssetto ? "assetto-corsa" : "iracing"))}</small><strong>${track.averageGridScore == null ? "—" : formatDecimal(track.averageGridScore)}</strong><span>${track.bestGridScore == null ? "sin datos" : `mejor ${formatDecimal(track.bestGridScore)}`}</span></article>
+      <article><small>${metricHelp("GridScore medio", gridScoreFormulaExplanation(scorePlatform))}</small><strong>${track.averageGridScore == null ? "—" : formatDecimal(track.averageGridScore)}</strong><span>${track.bestGridScore == null ? "sin datos" : `mejor ${formatDecimal(track.bestGridScore)}`}</span></article>
       <article><small>Rendimiento</small><strong>${track.averagePerformance == null ? "—" : formatDecimal(track.averagePerformance)}</strong><span>componente deportivo del GridScore</span></article>
-      <article><small>${metricHelp("Limpieza media", cleanlinessFormulaExplanation(isAssetto ? "assetto-corsa" : "iracing"))}</small><strong>${track.averageCleanliness == null ? "—" : formatDecimal(track.averageCleanliness)}</strong><span>${track.drivingMinutes ? `${formatInteger(Math.round(track.drivingMinutes))} min analizados` : "duración no disponible"}</span></article>
-      ${isAssetto ? `<article><small>Consistencia</small><strong>${track.averageConsistency == null ? "—" : formatDecimal(track.averageConsistency)}</strong><span>regularidad de vueltas disponible</span></article>` : `<article><small>SoF medio</small><strong>${track.averageSof ? formatInteger(track.averageSof) : "—"}</strong><span>nivel medio de las parrillas</span></article>`}
+      <article><small>${metricHelp("Limpieza media", cleanlinessFormulaExplanation(scorePlatform))}</small><strong>${track.averageCleanliness == null ? "—" : formatDecimal(track.averageCleanliness)}</strong><span>${track.drivingMinutes ? `${formatInteger(Math.round(track.drivingMinutes))} min analizados` : "duración no disponible"}</span></article>
+      ${isAssetto ? `<article><small>Consistencia</small><strong>${track.averageConsistency == null ? "—" : formatDecimal(track.averageConsistency)}</strong><span>regularidad de vueltas disponible</span></article>` : isRaceRoom ? "" : `<article><small>SoF medio</small><strong>${track.averageSof ? formatInteger(track.averageSof) : "—"}</strong><span>nivel medio de las parrillas</span></article>`}
       <article><small>Tamaño de parrilla</small><strong>${track.averageFieldSize == null ? "—" : formatDecimal(track.averageFieldSize)}</strong><span>pilotos de media</span></article>
       <article><small>Duelos de parrilla</small><strong>${track.duelWins}-${track.duelLosses}${track.duelTies ? `-${track.duelTies}` : ""}</strong><span>${duelRate == null ? "sin comparaciones" : `${formatDecimal(duelRate)}% superados`}</span></article>
       ${isAssetto ? `<article><small>Coches</small><strong>${track.cars.length || "—"}</strong><span>${track.cars.length ? track.cars.map(escapeHtml).join(" · ") : "no disponibles"}</span></article>
@@ -2762,7 +2817,7 @@ function openOwnerTrackDetail(trackIndex) {
           <thead><tr>
             <th>Carrera</th><th class="numeric">Salida</th><th class="numeric">Meta</th><th class="numeric">± Pos.</th>
             <th class="numeric">Inc.</th><th class="numeric">Vueltas</th><th class="numeric">Mejor vuelta</th>
-            ${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("assetto-corsa"))}</th>` : `<th class="numeric">SoF</th><th class="numeric">iRating</th><th class="numeric">SR</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("iracing"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("iracing"))}</th>`}<th></th>
+            ${isAssetto ? `<th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("assetto-corsa"))}</th>` : isRaceRoom ? `<th class="numeric">Rating</th><th class="numeric">Reputation</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("raceroom"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("raceroom"))}</th>` : `<th class="numeric">SoF</th><th class="numeric">iRating</th><th class="numeric">SR</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("iracing"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("iracing"))}</th>`}<th></th>
           </tr></thead>
           <tbody>${trackRaces.map((race) => `
             <tr data-driver-race-id="${race.eventId}" tabindex="0" role="button">
@@ -2773,7 +2828,7 @@ function openOwnerTrackDetail(trackIndex) {
               <td class="numeric">${race.incidents}x</td>
               <td class="numeric">${race.lapsComplete}</td>
               <td class="numeric">${formatLapTime(race.bestLapTime)}</td>
-              ${isAssetto ? `<td class="numeric">${gridScoreMarkup(race)}</td><td class="numeric">${cleanlinessMarkup(race)}</td>` : `<td class="numeric">${race.strengthOfField ? formatInteger(race.strengthOfField) : "—"}</td><td class="numeric">${race.newIRating == null ? "—" : formatInteger(race.newIRating)}</td><td class="numeric">${race.newSafetyRating == null ? "—" : formatDecimal(race.newSafetyRating)}</td><td class="numeric">${gridScoreMarkup(race)}</td><td class="numeric">${cleanlinessMarkup(race)}</td>`}
+              ${isAssetto ? `<td class="numeric">${gridScoreMarkup(race)}</td><td class="numeric">${cleanlinessMarkup(race)}</td>` : isRaceRoom ? `<td class="numeric">${race.newIRating == null ? "—" : formatInteger(race.newIRating)}</td><td class="numeric">${race.newSafetyRating == null ? "—" : formatDecimal(race.newSafetyRating)}</td><td class="numeric">${gridScoreMarkup(race)}</td><td class="numeric">${cleanlinessMarkup(race)}</td>` : `<td class="numeric">${race.strengthOfField ? formatInteger(race.strengthOfField) : "—"}</td><td class="numeric">${race.newIRating == null ? "—" : formatInteger(race.newIRating)}</td><td class="numeric">${race.newSafetyRating == null ? "—" : formatDecimal(race.newSafetyRating)}</td><td class="numeric">${gridScoreMarkup(race)}</td><td class="numeric">${cleanlinessMarkup(race)}</td>`}
               <td><button class="text-button" type="button" data-driver-race-id="${race.eventId}">Abrir</button></td>
             </tr>`).join("")}</tbody>
         </table>
@@ -2785,14 +2840,16 @@ function openOwnerTrackDetail(trackIndex) {
 
 function renderGlobalOverview() {
   const totals = globalAnalysis.totals || {};
-  const isAssetto = (appState.settings?.platform || appState.league?.platform) === "assetto-corsa";
+  const platform = appState.settings?.platform || appState.league?.platform;
+  const isAssetto = platform === "assetto-corsa";
+  const isRaceRoom = platform === "raceroom";
   document.querySelector("#globalStatGrid").innerHTML = `
     <article><small>Temporadas</small><strong>${totals.seasons || 0}</strong><span>series y temporadas</span></article>
     <article><small>Carreras</small><strong>${totals.races || 0}</strong><span>resultados completos</span></article>
     <article><small>Pilotos únicos</small><strong>${totals.drivers || 0}</strong><span>en todo el archivo</span></article>
     <article><small>Circuitos</small><strong>${totals.tracks || 0}</strong><span>trazados distintos</span></article>
-    <article><small>SoF medio</small><strong>${totals.averageSof ? formatInteger(totals.averageSof) : "—"}</strong><span>todas las carreras</span></article>
-    <article><small>${metricHelp("Incidentes de parrilla", fieldContactExplanation(isAssetto ? "assetto-corsa" : "iracing", "todo el archivo guardado"))}</small><strong>${formatInteger(totals.totalIncidents || 0)}x</strong><span>${formatDecimal(totals.averageIncidents || 0)}x por piloto y carrera</span></article>
+    ${isAssetto || isRaceRoom ? "" : `<article><small>SoF medio</small><strong>${totals.averageSof ? formatInteger(totals.averageSof) : "—"}</strong><span>todas las carreras</span></article>`}
+    <article><small>${metricHelp("Incidentes de parrilla", fieldContactExplanation(platform, "todo el archivo guardado"))}</small><strong>${formatInteger(totals.totalIncidents || 0)}x</strong><span>${formatDecimal(totals.averageIncidents || 0)}x por piloto y carrera</span></article>
   `;
   const container = document.querySelector("#seasonOverviewGrid");
   if (!globalAnalysis.seasons.length) {
@@ -2812,13 +2869,13 @@ function renderGlobalOverview() {
         <div><small>Carreras</small><strong>${season.raceCount}</strong></div>
         <div><small>Pilotos</small><strong>${season.driverCount}</strong></div>
         <div><small>Circuitos</small><strong>${season.trackCount}</strong></div>
-        <div><small>SoF</small><strong>${season.averageSof ? formatInteger(season.averageSof) : "—"}</strong></div>
+        <div><small>${isAssetto || isRaceRoom ? "Tus victorias" : "SoF"}</small><strong>${isAssetto || isRaceRoom ? season.ownerWins : season.averageSof ? formatInteger(season.averageSof) : "—"}</strong></div>
       </div>
       <div class="season-owner-summary">
         <span>Tus carreras <strong>${season.ownerRaces}</strong></span>
         <span>Media <strong>${season.ownerAverageFinish ? formatDecimal(season.ownerAverageFinish) : "—"}</strong></span>
         <span>Mejor <strong>${season.ownerBestFinish ? `P${season.ownerBestFinish}` : "—"}</strong></span>
-        <span>iRating <strong>${formatSigned(season.ownerIRatingChange)}</strong></span>
+        ${isAssetto ? "" : `<span>${isRaceRoom ? "Rating" : "iRating"} <strong>${formatSigned(season.ownerIRatingChange)}</strong></span>`}
       </div>
       <footer>
         <span>${season.weeksCompleted} / ${season.totalWeeks} semanas · ${formatDecimal(season.averageIncidents)}x por piloto y carrera</span>
@@ -3181,6 +3238,18 @@ document.querySelector("#seasonOverviewGrid").addEventListener("click", async (e
 document.querySelector("#raceExplorer").addEventListener("click", (event) => {
   const card = event.target.closest("[data-race-id]");
   if (card) openRaceDetail(Number(card.dataset.raceId));
+});
+document.querySelector("#raceProgressBody").addEventListener("click", (event) => {
+  const row = event.target.closest("[data-progress-race-id]");
+  if (row) openRaceDetail(Number(row.dataset.progressRaceId));
+});
+document.querySelector("#raceProgressBody").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const row = event.target.closest("[data-progress-race-id]");
+  if (row) {
+    event.preventDefault();
+    openRaceDetail(Number(row.dataset.progressRaceId));
+  }
 });
 document.querySelector("#ownerSeasonRaces").addEventListener("click", (event) => {
   const row = event.target.closest("[data-owner-season-race]");

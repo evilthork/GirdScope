@@ -815,6 +815,17 @@ tbody tr:last-child td { border-bottom: 0; }
 .rivals-panel { overflow: hidden; }
 .race-progress-panel { margin-bottom: 16px; overflow: hidden; }
 .race-progress-table { min-width: 900px; }
+.race-progress-table tbody tr[data-progress-race-id] {
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+.race-progress-table tbody tr[data-progress-race-id]:hover {
+  background: rgba(var(--series-accent-rgb), .065);
+}
+.race-progress-table tbody tr[data-progress-race-id]:focus-visible {
+  outline: 2px solid var(--series-accent);
+  outline-offset: -2px;
+}
 .table-subline { display: block; margin-top: 3px; color: var(--subtle); font-size: 7px; font-weight: 400; }
 .rivals-table { min-width: 900px; }
 .rival-row { cursor: pointer; transition: .15s ease; }
