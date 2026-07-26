@@ -134,7 +134,8 @@ try {
             if (-not (Get-InstalledGridScopeProcesses -ExecutablePath $currentExecutable)) {
                 Start-Process `
                     -FilePath $currentExecutable `
-                    -WorkingDirectory $resolvedInstallDirectory
+                    -WorkingDirectory $resolvedInstallDirectory `
+                    -ArgumentList "--no-open-browser"
             }
             $restartDeadline = [DateTime]::UtcNow.AddSeconds(20)
             while ([DateTime]::UtcNow -lt $restartDeadline) {
@@ -161,6 +162,16 @@ try {
             throw (
                 "La actualización se ha instalado, pero GridScope no ha " +
                 "podido volver a abrirse automáticamente."
+            )
+        }
+    }
+    if (-not $NoRestart) {
+        try {
+            Start-Process "http://127.0.0.1:4173"
+        } catch {
+            throw (
+                "GridScope se ha actualizado y el servidor estÃ¡ activo, " +
+                "pero no se ha podido abrir el navegador automÃ¡ticamente."
             )
         }
     }

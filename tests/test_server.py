@@ -8,6 +8,7 @@ import struct
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from server import (
@@ -22,6 +23,7 @@ from server import (
     normalize_assetto_corsa_export,
     normalize_iracing_export,
     normalize_raceroom_result,
+    open_application_url,
     raceroom_profile_slug,
     official_track_slug,
     read_ibt_metadata,
@@ -175,6 +177,31 @@ class UpdateSystemTests(unittest.TestCase):
                     Path(directory),
                     opener=lambda request, timeout: io.BytesIO(content),
                 )
+
+    def test_windows_browser_is_opened_with_the_system_shell(self):
+        application_url = "http://127.0.0.1:4173"
+        with (
+            patch("server.os.name", "nt"),
+            patch("server.os.startfile", create=True) as startfile,
+            patch("server.webbrowser.open") as browser_fallback,
+        ):
+            open_application_url(application_url)
+        startfile.assert_called_once_with(application_url)
+        browser_fallback.assert_not_called()
+
+    def test_browser_falls_back_when_the_system_shell_fails(self):
+        application_url = "http://127.0.0.1:4173"
+        with (
+            patch("server.os.name", "nt"),
+            patch(
+                "server.os.startfile",
+                side_effect=OSError("shell unavailable"),
+                create=True,
+            ),
+            patch("server.webbrowser.open") as browser_fallback,
+        ):
+            open_application_url(application_url)
+        browser_fallback.assert_called_once_with(application_url)
 
 
 class DataStoreTests(unittest.TestCase):

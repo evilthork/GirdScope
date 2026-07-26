@@ -13,13 +13,13 @@ ningún servidor.
 > largo, aumenta en Content Manager la opción
 > **Keep results of the last … sessions**.
 
-> Versión actual: **0.7.8 Beta**
+> Versión actual: **0.7.9 Beta**
 
 ## Descargar GridScope
 
-[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.8-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.8/GridScope-0.7.8-Windows.zip)
+[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.9-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.9/GridScope-0.7.9-Windows.zip)
 
-**[Descargar GridScope 0.7.8 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.8/GridScope-0.7.8-Windows.zip)**
+**[Descargar GridScope 0.7.9 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.9/GridScope-0.7.9-Windows.zip)**
 
 No requiere instalación: descomprime el ZIP y ejecuta `GridScope.exe`.
 
@@ -68,7 +68,7 @@ historial existente.
 
 ### Versión preparada
 
-1. [Descarga `GridScope-0.7.8-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.8/GridScope-0.7.8-Windows.zip).
+1. [Descarga `GridScope-0.7.9-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.9/GridScope-0.7.9-Windows.zip).
 2. Descomprime el archivo.
 3. Ejecuta `GridScope.exe`.
 4. Mantén abierta la ventana del servidor mientras utilizas la aplicación.

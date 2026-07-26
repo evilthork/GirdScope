@@ -2,6 +2,15 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.7.9] - 2026-07-26
+
+- La interfaz vuelve a abrirse de forma visible después de instalar una
+  actualización.
+- El ejecutable espera a que el servidor local esté preparado antes de abrir
+  la página en el navegador predeterminado.
+- El asistente de futuras actualizaciones inicia el servidor sin duplicar
+  pestañas y abre el navegador después de verificar la versión instalada.
+
 ## [0.7.8] - 2026-07-26
 
 - La configuración y la importación manual explican claramente que los JSON

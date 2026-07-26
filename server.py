@@ -41,7 +41,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.7.8"
+APP_VERSION = "0.7.9"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -8921,6 +8921,16 @@ def build_server(host: str, port: int, store: DataStore) -> ThreadingHTTPServer:
     return ThreadingHTTPServer((host, port), handler)
 
 
+def open_application_url(application_url: str) -> None:
+    try:
+        if os.name == "nt":
+            os.startfile(application_url)  # type: ignore[attr-defined]
+            return
+    except OSError:
+        pass
+    webbrowser.open(application_url)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Servidor local de GridScope")
     parser.add_argument("--host", default="127.0.0.1")
@@ -8940,7 +8950,13 @@ def main() -> None:
     print(f"GridScope disponible en {application_url}")
     print("Manten esta ventana abierta. Pulsa Ctrl+C para detener la aplicacion.")
     if not arguments.no_open_browser and (arguments.open_browser or getattr(sys, "frozen", False)):
-        webbrowser.open(application_url)
+        browser_timer = threading.Timer(
+            0.75,
+            open_application_url,
+            args=(application_url,),
+        )
+        browser_timer.daemon = True
+        browser_timer.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
