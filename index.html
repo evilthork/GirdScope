@@ -575,6 +575,7 @@
                 <button class="secondary-button" type="button" id="scanImportFolderButton">Buscar ahora</button>
               </div>
               <p class="oauth-notice" id="folderScanStatus">Solo se revisan archivos `.json` de esta carpeta, sin entrar en subcarpetas.</p>
+              <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Zm-3-10 2 2 4-4" /></svg><span><strong>¿Puedo borrar los JSON?</strong> Sí. Después de importarlos correctamente puedes eliminarlos y liberar espacio; las carreras y estadísticas ya están guardadas en GridScope. No necesitas acumular los archivos originales.</span></p>
             </section>
             <section class="panel settings-card telemetry-settings-card" data-simulator-only="iracing">
               <div class="settings-icon telemetry-icon"><svg viewBox="0 0 24 24"><path d="M3 15h3l2-8 4 13 3-10 2 5h4M4 4v16h16" /></svg></div>
@@ -626,7 +627,7 @@
                 <li><span>3</span><p><strong>Distingue pilotos e IA</strong><small>En local solo conserva tu resultado; en servidores online y LFM mantiene a todos los pilotos.</small></p></li>
                 <li><span>4</span><p><strong>Se construye tu historial</strong><small>Comparativas, rivales y campeonatos se actualizan sin subir datos a internet.</small></p></li>
               </ol>
-              <p class="oauth-notice">En Content Manager aumenta <strong>Keep results of the last … sessions</strong> para conservar un histórico más largo.</p>
+              <p class="oauth-notice"><strong>¿Puedo borrar los JSON?</strong> Sí. Una vez importados correctamente, no necesitas acumularlos: las carreras seguirán disponibles en GridScope aunque Content Manager o tú eliminéis los archivos originales. Aumentar <strong>Keep results of the last … sessions</strong> es opcional y solo da más tiempo para que GridScope detecte sesiones nuevas.</p>
             </section>
             <section class="panel settings-card" data-simulator-only="raceroom">
               <div class="settings-icon"><strong>RR</strong></div>
@@ -750,7 +751,7 @@
           <label><input id="includeAllDrivers" type="checkbox" checked /><span><strong>Añadir los pilotos encontrados</strong><small>Los incorpora automáticamente a esta liga.</small></span></label>
           <label><input id="replaceDemoData" type="checkbox" checked /><span><strong>Reemplazar los datos de demostración</strong><small>Solo elimina los pilotos ficticios al realizar la primera importación.</small></span></label>
         </div>
-        <p class="dialog-help">El archivo original se conservará íntegro dentro de SQLite. Las carreras repetidas se detectan mediante su Subsession ID y contenido.</p>
+        <p class="dialog-help"><strong>Después de importarlos correctamente puedes borrar los JSON.</strong> No necesitas acumularlos: las carreras y estadísticas seguirán disponibles en GridScope. Conserva los originales únicamente si quieres una copia adicional. Las carreras repetidas se detectan mediante su Subsession ID y contenido.</p>
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-import>Cancelar</button>
           <button class="primary-button" type="button" id="confirmImportButton" disabled>Importar resultados</button>

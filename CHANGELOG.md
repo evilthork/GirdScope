@@ -2,6 +2,17 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.7.8] - 2026-07-26
+
+- La configuración y la importación manual explican claramente que los JSON
+  pueden eliminarse después de importarlos correctamente.
+- Las carreras y estadísticas ya importadas permanecen guardadas en la base
+  local; no es necesario acumular los archivos originales.
+- Se aclara que conservar los JSON solo es una copia adicional y que el límite
+  de resultados de Content Manager es opcional.
+- La sección de privacidad utiliza una explicación directa sobre la ubicación
+  de la base de datos y la configuración local.
+
 ## [0.7.7] - 2026-07-26
 
 - El actualizador espera ahora a que terminen todos los procesos de la

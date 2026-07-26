@@ -13,13 +13,13 @@ ningún servidor.
 > largo, aumenta en Content Manager la opción
 > **Keep results of the last … sessions**.
 
-> Versión actual: **0.7.7 Beta**
+> Versión actual: **0.7.8 Beta**
 
 ## Descargar GridScope
 
-[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.7-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.7/GridScope-0.7.7-Windows.zip)
+[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.8-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.8/GridScope-0.7.8-Windows.zip)
 
-**[Descargar GridScope 0.7.7 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.7/GridScope-0.7.7-Windows.zip)**
+**[Descargar GridScope 0.7.8 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.8/GridScope-0.7.8-Windows.zip)**
 
 No requiere instalación: descomprime el ZIP y ejecuta `GridScope.exe`.
 
@@ -52,22 +52,23 @@ No requiere instalación: descomprime el ZIP y ejecuta `GridScope.exe`.
 
 GridScope funciona en el ordenador del usuario y escucha únicamente en
 `127.0.0.1`. Los resultados, configuraciones y credenciales no se envían a
-GridScope ni a servicios propios.
+ningún servidor propio de GridScope.
 
-En una instalación pública nueva, los datos se guardan en:
+La base de datos local y la configuración de GridScope se guardan en:
 
 ```text
 %LOCALAPPDATA%\GridScope
 ```
 
-Las instalaciones antiguas que ya tengan `data\apex-local.db` junto al código
-continúan utilizando esa base para no perder su historial.
+Si actualizas desde una instalación antigua que ya contiene
+`data\apex-local.db`, GridScope seguirá utilizando esa base para conservar el
+historial existente.
 
 ## Instalar en Windows
 
 ### Versión preparada
 
-1. [Descarga `GridScope-0.7.7-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.7/GridScope-0.7.7-Windows.zip).
+1. [Descarga `GridScope-0.7.8-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.8/GridScope-0.7.8-Windows.zip).
 2. Descomprime el archivo.
 3. Ejecuta `GridScope.exe`.
 4. Mantén abierta la ventana del servidor mientras utilizas la aplicación.
@@ -99,6 +100,17 @@ Python.
 
 Al abrir GridScope por primera vez se elige el simulador.
 
+### Conservación de los archivos de origen
+
+> [!NOTE]
+> **Sí, puedes eliminar los JSON después de importarlos correctamente.**
+> GridScope ya habrá guardado las carreras y sus estadísticas en el ordenador,
+> por lo que no necesitas acumular archivos en la carpeta de origen.
+
+Conservarlos es completamente opcional y solo sirve como copia adicional para
+volver a importar el historial si restableces los datos de GridScope. También
+puedes utilizar la opción **Crear copia de seguridad** de la aplicación.
+
 ### iRacing
 
 Indica tu Customer ID y la carpeta donde guardas los resultados JSON. La API de
@@ -129,7 +141,10 @@ de Content Manager. Su ubicación habitual es:
 La carpeta correcta contiene archivos `.json` generados al terminar sesiones.
 Si todavía no existe, inicia Assetto Corsa desde Content Manager y completa al
 menos una sesión. Para evitar que los resultados antiguos se eliminen, aumenta
-en Content Manager el valor de **Keep results of the last … sessions**.
+en Content Manager el valor de **Keep results of the last … sessions**; este
+ajuste es opcional y solo da más tiempo a GridScope para encontrarlos.
+Si Content Manager elimina después un JSON antiguo, la carrera ya importada
+continúa guardada en GridScope.
 GridScope reconoce prácticas y clasificaciones, pero solo las carreras puntúan.
 En sesiones locales excluye los rivales identificados como IA.
 
@@ -171,7 +186,7 @@ tiempo de ejecución. Para ejecutar las pruebas:
 python -m unittest discover -s tests -v
 ```
 
-Para generar un paquete público limpio:
+Para generar un paquete de distribución limpio:
 
 ```powershell
 .\scripts\crear-version-publica.ps1
