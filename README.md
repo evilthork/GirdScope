@@ -5,13 +5,13 @@ GridScope es una aplicación local de estadísticas para **iRacing**,
 comparativas y Campeonatos GridScope sin subir el historial del usuario a
 ningún servidor.
 
-> Versión actual: **0.7.3 Beta**
+> Versión actual: **0.7.4 Beta**
 
 ## Descargar GridScope
 
-[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.3-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.3/GridScope-0.7.3-Windows.zip)
+[![Descargar GridScope para Windows](https://img.shields.io/badge/Descargar_para_Windows-GridScope_0.7.4-ff7a2f?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/evilthork/GirdScope/releases/download/v0.7.4/GridScope-0.7.4-Windows.zip)
 
-**[Descargar GridScope 0.7.3 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.3/GridScope-0.7.3-Windows.zip)**
+**[Descargar GridScope 0.7.4 para Windows](https://github.com/evilthork/GirdScope/releases/download/v0.7.4/GridScope-0.7.4-Windows.zip)**
 
 No requiere instalación: descomprime el ZIP y ejecuta `GridScope.exe`.
 
@@ -57,7 +57,7 @@ continúan utilizando esa base para no perder su historial.
 
 ### Versión preparada
 
-1. [Descarga `GridScope-0.7.3-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.3/GridScope-0.7.3-Windows.zip).
+1. [Descarga `GridScope-0.7.4-Windows.zip`](https://github.com/evilthork/GirdScope/releases/download/v0.7.4/GridScope-0.7.4-Windows.zip).
 2. Descomprime el archivo.
 3. Ejecuta `GridScope.exe`.
 4. Mantén abierta la ventana del servidor mientras utilizas la aplicación.

@@ -4,7 +4,8 @@
 
 - `0.7.1`: primera beta pública con la licencia no comercial definitiva.
 - `0.7.2`: integración inicial de RaceRoom.
-- `0.7.3`: compatibilidad con las dos variantes de URL pública de RaceRoom.
+- `0.7.4`: mejoras visuales, clasificación de referencia duplicada en su puesto
+  real y corrección de apertura de carreras desde perfiles superpuestos.
 - `0.7.4`, `0.7.5`…: correcciones que no cambian el funcionamiento básico.
 - `0.8.0`: nuevas funciones relevantes.
 - `1.0.0`: primera versión considerada estable.
@@ -17,8 +18,8 @@
 
 El proceso ejecuta las pruebas y genera en `release\`:
 
-- `GridScope-0.7.3-Windows.zip`
-- `GridScope-0.7.3-Source.zip`
+- `GridScope-0.7.4-Windows.zip`
+- `GridScope-0.7.4-Source.zip`
 
 Ninguno contiene bases de datos, resultados, copias de seguridad, cachés,
 credenciales o rutas personales.
@@ -36,10 +37,10 @@ el navegador ni tocar los datos reales.
 ## Publicar en GitHub
 
 1. Revisa `git status` y crea el commit de la versión.
-2. Crea la etiqueta `v0.7.3`.
+2. Crea la etiqueta `v0.7.4`.
 3. Sube la rama y la etiqueta al repositorio.
 4. Abre **Releases → Draft a new release**.
-5. Selecciona `v0.7.3` y marca la versión como **Pre-release**.
+5. Selecciona `v0.7.4` y marca la versión como **Pre-release**.
 6. Adjunta ambos ZIP de `release\`.
 7. Utiliza el contenido de `CHANGELOG.md` como notas de la versión.
 

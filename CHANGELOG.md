@@ -2,6 +2,17 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.7.4] - 2026-07-26
+
+- El piloto de referencia permanece destacado al principio de los Campeonatos
+  GridScope y también aparece en su posición real dentro de la clasificación.
+- Se corrige la apertura de una carrera desde un perfil de piloto cuando el
+  detalle de esa carrera ya estaba abierto en una capa anterior.
+- El selector inicial utiliza símbolos gráficos propios para cada simulador y
+  elimina textos que podían sugerir una afiliación oficial.
+- El mensaje de almacenamiento inicial se simplifica para indicar claramente
+  que GridScope utiliza una base de datos local.
+
 ## [0.7.3] - 2026-07-25
 
 - Se aceptan las URL públicas de RaceRoom con formato `/users/usuario/career`

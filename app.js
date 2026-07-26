@@ -589,7 +589,7 @@ const metricGlossaryEntries = [
   [["participaciones"], "Número de carreras válidas del periodo en las que aparece el piloto. Una carrera suma una sola participación por piloto, aunque el archivo contenga más sesiones asociadas."],
   [["participantes", "pilotos", "pilotos unicos", "rivales distintos"], "Cantidad de pilotos diferentes que aparecen en las carreras válidas del periodo. Un mismo piloto solo se cuenta una vez."],
   [["miembros por carrera"], "Promedio de miembros del campeonato presentes por carrera: suma de miembros detectados en todas las carreras ÷ número de carreras puntuables."],
-  [["referencia"], "Puesto real del piloto configurado como referencia. Su fila se fija arriba y se resalta para localizarla fácilmente, pero conserva aquí su posición verdadera en la clasificación."],
+  [["referencia"], "Piloto configurado como referencia para calcular comparativas y enfrentamientos directos."],
   [["comparacion historica"], "Compara el periodo seleccionado con el periodo anterior que tenga carreras puntuables. Se muestran ambos valores y, debajo, cuánto sube o baja el dato."],
   [["recurrentes", "rivales recurrentes"], "Pilotos que aparecen en al menos dos carreras del periodo junto al piloto de referencia. Una sola coincidencia no basta para considerarlo recurrente."],
   [["inc", "incidentes", "incidentes totales"], "Puntos de incidente registrados por iRacing en las carreras válidas. Si el dato aparece en una fila de piloto es personal; si indica «parrilla», suma a todos los participantes. GridScope muestra el valor del JSON y no lo estima."],
@@ -1307,7 +1307,7 @@ function renderMiniLeagues() {
   const body = document.querySelector("#miniLeagueBody");
   const sortValue = (participant, key) => {
     const values = {
-      position: participant.position,
+      position: classification.positions.get(String(participant.iracingId)) ?? participant.position,
       name: participant.name,
       score: participant.score,
       races: participant.races,
@@ -1324,9 +1324,6 @@ function renderMiniLeagues() {
     return values[key];
   };
   const sortedParticipants = league.participants.slice().sort((participantA, participantB) => {
-    if (participantA.isOwner !== participantB.isOwner) {
-      return participantA.isOwner ? -1 : 1;
-    }
     const classifiedA = classification.positions.has(String(participantA.iracingId));
     const classifiedB = classification.positions.has(String(participantB.iracingId));
     if (classifiedA !== classifiedB) return classifiedA ? -1 : 1;
@@ -1348,15 +1345,21 @@ function renderMiniLeagues() {
       ? miniLeagueSort.direction === "asc" ? "↑" : "↓"
       : "↕";
   });
+  const tableParticipants = ownerParticipant
+    ? [
+        { participant: ownerParticipant, pinned: true },
+        ...sortedParticipants.map((participant) => ({ participant, pinned: false }))
+      ]
+    : sortedParticipants.map((participant) => ({ participant, pinned: false }));
   body.innerHTML = league.participants.length
-    ? sortedParticipants.map((participant) => {
+    ? tableParticipants.map(({ participant, pinned }) => {
       const officialPosition = classification.positions.get(String(participant.iracingId));
       const classified = officialPosition != null;
       const displayedPosition = participant.isOwner
         ? officialPosition ?? participant.position
         : officialPosition;
       return `
-      <tr class="${classified ? "" : "mini-provisional"} ${participant.isOwner ? "mini-owner-row" : ""}" data-mini-driver-id="${participant.iracingId}" tabindex="0">
+      <tr class="${classified ? "" : "mini-provisional"} ${participant.isOwner ? "mini-owner-row" : ""} ${pinned ? "mini-owner-pinned-row" : ""}" data-mini-driver-id="${participant.iracingId}" tabindex="0">
         <td><span class="position ${classified && officialPosition <= 3 ? "medal" : ""}">${displayedPosition ?? "—"}</span></td>
         <td><div class="driver-cell"><i class="avatar ${participant.color}">${escapeHtml(participant.initials)}</i><span><strong>${escapeHtml(participant.name)}${classified ? "" : ' <em class="mini-provisional-badge">Provisional</em>'}</strong><small>${participant.isOwner ? "Piloto de referencia" : escapeHtml(driverIdentityText(participant.iracingId))} · ${participant.races}/${miniLeagueMinimumRaces} carreras mínimas</small></span></div></td>
         <td class="numeric mini-score">${formatDecimal(participant.score)}</td>
@@ -2043,7 +2046,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
     "Preparando el resultado…",
     "Estamos calculando la clasificación, los duelos y las métricas de todos los pilotos."
   );
-  raceDetailDialog.showModal();
+  showDetailDialogOnTop(raceDetailDialog);
   const activity = beginActivity(
     "Preparando el resultado de carrera…",
     "Calculando posiciones, comparativas, GridScore y limpieza."
