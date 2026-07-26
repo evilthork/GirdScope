@@ -68,6 +68,9 @@ try {
     if ($version -ne "9.9.9" -or $result.status -ne "ok") {
         throw "El actualizador no ha completado correctamente la prueba."
     }
+    if ($result.restarted) {
+        throw "La prueba aislada con NoRestart no debe iniciar la aplicación."
+    }
 
     [pscustomobject]@{
         Sustitucion = $current

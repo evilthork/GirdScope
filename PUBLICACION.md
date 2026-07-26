@@ -8,6 +8,7 @@
   real y corrección de apertura de carreras desde perfiles superpuestos.
 - `0.7.5`: sistema de actualización segura desde GitHub.
 - `0.7.6`: campeonatos y terminología específicos de RaceRoom.
+- `0.7.7`: reinicio verificado después de una actualización automática.
 - `0.7.x`: correcciones y mejoras compatibles con esta beta.
 - `0.8.0`: nuevas funciones relevantes.
 - `1.0.0`: primera versión considerada estable.
@@ -20,8 +21,8 @@
 
 El proceso ejecuta las pruebas y genera en `release\`:
 
-- `GridScope-0.7.6-Windows.zip`
-- `GridScope-0.7.6-Source.zip`
+- `GridScope-0.7.7-Windows.zip`
+- `GridScope-0.7.7-Source.zip`
 
 Ninguno contiene bases de datos, resultados, copias de seguridad, cachés,
 credenciales o rutas personales.
@@ -45,10 +46,10 @@ Para validar también la sustitución segura del ejecutable y su copia anterior:
 ## Publicar en GitHub
 
 1. Revisa `git status` y crea el commit de la versión.
-2. Crea la etiqueta `v0.7.6`.
+2. Crea la etiqueta `v0.7.7`.
 3. Sube la rama y la etiqueta al repositorio.
 4. Abre **Releases → Draft a new release**.
-5. Selecciona `v0.7.6` y marca la versión como **Pre-release**.
+5. Selecciona `v0.7.7` y marca la versión como **Pre-release**.
 6. Adjunta ambos ZIP de `release\`.
 7. Utiliza el contenido de `CHANGELOG.md` como notas de la versión.
 

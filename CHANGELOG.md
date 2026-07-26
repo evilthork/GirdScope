@@ -2,6 +2,17 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.7.7] - 2026-07-26
+
+- El actualizador espera ahora a que terminen todos los procesos de la
+  instalación anterior antes de sustituir y volver a ejecutar GridScope.
+- Después del reinicio comprueba que el servidor local responde y que ejecuta
+  exactamente la versión recién instalada.
+- Si la aplicación no llega a abrirse, el registro distingue ese problema de
+  la instalación de archivos y muestra un mensaje específico.
+- El asistente actualizado se conserva en la carpeta de instalación para las
+  siguientes versiones.
+
 ## [0.7.6] - 2026-07-26
 
 - Los Campeonatos GridScope de RaceRoom agrupan ahora cada campeonato ranked

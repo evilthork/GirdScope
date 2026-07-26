@@ -19,6 +19,24 @@ $extractRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
     "gridscope-update-" + [guid]::NewGuid().ToString("N")
 )
 
+function Get-InstalledGridScopeProcesses {
+    param([Parameter(Mandatory = $true)][string]$ExecutablePath)
+
+    $normalizedExecutable = [System.IO.Path]::GetFullPath($ExecutablePath)
+    @(
+        Get-CimInstance Win32_Process `
+            -Filter "Name = 'GridScope.exe'" `
+            -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.ExecutablePath -and
+            [System.IO.Path]::GetFullPath($_.ExecutablePath).Equals(
+                $normalizedExecutable,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )
+        }
+    )
+}
+
 try {
     $resolvedPackage = (Resolve-Path -LiteralPath $PackagePath).Path
     $resolvedInstallDirectory = (Resolve-Path -LiteralPath $InstallDirectory).Path
@@ -28,15 +46,25 @@ try {
     if ($ExecutableName -ne "GridScope.exe") {
         throw "El ejecutable de destino no es válido."
     }
+    $currentExecutable = Join-Path $resolvedInstallDirectory $ExecutableName
+    if (-not (Test-Path -LiteralPath $currentExecutable -PathType Leaf)) {
+        throw "No se encuentra la instalación actual de GridScope."
+    }
 
     $deadline = [DateTime]::UtcNow.AddSeconds(90)
     while (
-        (Get-Process -Id $TargetProcessId -ErrorAction SilentlyContinue) -and
+        (
+            (Get-Process -Id $TargetProcessId -ErrorAction SilentlyContinue) -or
+            (Get-InstalledGridScopeProcesses -ExecutablePath $currentExecutable)
+        ) -and
         [DateTime]::UtcNow -lt $deadline
     ) {
         Start-Sleep -Milliseconds 300
     }
-    if (Get-Process -Id $TargetProcessId -ErrorAction SilentlyContinue) {
+    if (
+        (Get-Process -Id $TargetProcessId -ErrorAction SilentlyContinue) -or
+        (Get-InstalledGridScopeProcesses -ExecutablePath $currentExecutable)
+    ) {
         throw "GridScope no se ha cerrado a tiempo."
     }
 
@@ -61,10 +89,6 @@ try {
         throw "El paquete no contiene GridScope.exe."
     }
 
-    $currentExecutable = Join-Path $resolvedInstallDirectory $ExecutableName
-    if (-not (Test-Path -LiteralPath $currentExecutable -PathType Leaf)) {
-        throw "No se encuentra la instalación actual de GridScope."
-    }
     $backupExecutable = Join-Path $resolvedInstallDirectory "GridScope.previous.exe"
     Copy-Item -LiteralPath $currentExecutable -Destination $backupExecutable -Force
 
@@ -84,7 +108,13 @@ try {
         }
     }
 
-    foreach ($supportFile in @("README.md", "CHANGELOG.md", "LICENSE", "VERSION")) {
+    foreach ($supportFile in @(
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE",
+        "VERSION",
+        "actualizar-gridscope.ps1"
+    )) {
         $source = Join-Path $newExecutable.Directory.FullName $supportFile
         if (Test-Path -LiteralPath $source -PathType Leaf) {
             Copy-Item `
@@ -94,15 +124,53 @@ try {
         }
     }
 
+    if (-not $NoRestart) {
+        $expectedVersionPath = Join-Path $resolvedInstallDirectory "VERSION"
+        $expectedVersion = (
+            Get-Content -LiteralPath $expectedVersionPath -Raw
+        ).Trim()
+        $restartSucceeded = $false
+        for ($attempt = 0; $attempt -lt 3 -and -not $restartSucceeded; $attempt++) {
+            if (-not (Get-InstalledGridScopeProcesses -ExecutablePath $currentExecutable)) {
+                Start-Process `
+                    -FilePath $currentExecutable `
+                    -WorkingDirectory $resolvedInstallDirectory
+            }
+            $restartDeadline = [DateTime]::UtcNow.AddSeconds(20)
+            while ([DateTime]::UtcNow -lt $restartDeadline) {
+                try {
+                    $health = Invoke-RestMethod `
+                        -Uri "http://127.0.0.1:4173/api/health" `
+                        -TimeoutSec 2
+                    if (
+                        $health.status -eq "ok" -and
+                        $health.version -eq $expectedVersion
+                    ) {
+                        $restartSucceeded = $true
+                        break
+                    }
+                } catch {
+                    $health = $null
+                }
+                if (-not $restartSucceeded) {
+                    Start-Sleep -Milliseconds 400
+                }
+            }
+        }
+        if (-not $restartSucceeded) {
+            throw (
+                "La actualización se ha instalado, pero GridScope no ha " +
+                "podido volver a abrirse automáticamente."
+            )
+        }
+    }
     [pscustomobject]@{
         status = "ok"
+        restarted = (-not $NoRestart)
         updatedAt = [DateTime]::UtcNow.ToString("o")
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
     "Actualización instalada correctamente." |
         Set-Content -LiteralPath $logPath -Encoding UTF8
-    if (-not $NoRestart) {
-        Start-Process -FilePath $currentExecutable
-    }
 } catch {
     $message = $_.Exception.Message
     [pscustomobject]@{
