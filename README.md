@@ -5,6 +5,14 @@ GridScope es una aplicación local de estadísticas para **iRacing**,
 comparativas y Campeonatos GridScope sin subir el historial del usuario a
 ningún servidor.
 
+> [!IMPORTANT]
+> Para obtener el historial de **Assetto Corsa original** es necesario iniciar
+> el juego mediante **Content Manager**. No hace falta activar telemetría ni
+> instalar ninguna aplicación adicional: Content Manager crea automáticamente
+> un archivo JSON al terminar cada sesión. Para conservar un historial más
+> largo, aumenta en Content Manager la opción
+> **Keep results of the last … sessions**.
+
 > Versión actual: **0.7.7 Beta**
 
 ## Descargar GridScope
@@ -105,6 +113,12 @@ Puedes consultar el
 
 ### Assetto Corsa
 
+El historial de Assetto Corsa se obtiene de los resultados guardados por
+**Content Manager**, por lo que las sesiones deben iniciarse desde él. Al
+terminar una sesión, Content Manager genera el archivo JSON automáticamente;
+no es necesario activar telemetría, instalar un complemento ni habilitar una
+aplicación dentro del simulador.
+
 Indica los nombres o alias con los que apareces y revisa la carpeta de sesiones
 de Content Manager. Su ubicación habitual es:
 
@@ -113,6 +127,9 @@ de Content Manager. Su ubicación habitual es:
 ```
 
 La carpeta correcta contiene archivos `.json` generados al terminar sesiones.
+Si todavía no existe, inicia Assetto Corsa desde Content Manager y completa al
+menos una sesión. Para evitar que los resultados antiguos se eliminen, aumenta
+en Content Manager el valor de **Keep results of the last … sessions**.
 GridScope reconoce prácticas y clasificaciones, pero solo las carreras puntúan.
 En sesiones locales excluye los rivales identificados como IA.
 
