@@ -41,7 +41,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.8.4"
+APP_VERSION = "0.8.5"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -74,6 +74,7 @@ UPDATE_DOWNLOAD_PREFIX = (
 UPDATE_CACHE_SECONDS = 600
 UPDATE_MAX_PACKAGE_BYTES = 150_000_000
 UPDATE_HELPER_NAME = "actualizar-gridscope.ps1"
+UPDATE_RESULT_PATH = USER_DATA_DIR / "updates" / "ultima-actualizacion.json"
 _update_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
 _update_cache_lock = threading.Lock()
 
@@ -8996,6 +8997,56 @@ def open_application_url(application_url: str) -> None:
     webbrowser.open(application_url)
 
 
+def consume_post_update_browser_suppression(
+    result_path: Path = UPDATE_RESULT_PATH,
+    current_version: str = APP_VERSION,
+    now: datetime | None = None,
+) -> bool:
+    """Consume the one-shot flag that keeps the existing browser tab after an update."""
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    if (
+        not isinstance(result, dict)
+        or result.get("status") != "ok"
+        or not result.get("requiresManualStart")
+        or result.get("manualStartConsumed")
+    ):
+        return False
+
+    installed_version = str(result.get("installedVersion") or "").strip()
+    matches_current_version = installed_version == current_version
+    if installed_version and not matches_current_version:
+        return False
+    if not installed_version:
+        try:
+            updated_at = datetime.fromisoformat(
+                str(result.get("updatedAt", "")).replace("Z", "+00:00")
+            )
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
+            current_time = now or datetime.now(timezone.utc)
+            if current_time - updated_at.astimezone(timezone.utc) > timedelta(hours=6):
+                return False
+        except (TypeError, ValueError):
+            return False
+
+    result["manualStartConsumed"] = True
+    result["manualStartConsumedAt"] = utc_now()
+    try:
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = result_path.with_suffix(".tmp")
+        temporary_path.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary_path.replace(result_path)
+    except OSError:
+        return False
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Servidor local de GridScope")
     parser.add_argument("--host", default="127.0.0.1")
@@ -9014,7 +9065,20 @@ def main() -> None:
     application_url = f"http://{arguments.host}:{arguments.port}"
     print(f"GridScope disponible en {application_url}")
     print("Manten esta ventana abierta. Pulsa Ctrl+C para detener la aplicacion.")
-    if not arguments.no_open_browser and (arguments.open_browser or getattr(sys, "frozen", False)):
+    packaged = bool(getattr(sys, "frozen", False))
+    reuse_existing_browser = (
+        packaged
+        and not arguments.no_open_browser
+        and not arguments.open_browser
+        and consume_post_update_browser_suppression()
+    )
+    if reuse_existing_browser:
+        print("Actualizacion detectada: se reutilizara la pestana que ya estaba abierta.")
+    if (
+        not arguments.no_open_browser
+        and (arguments.open_browser or packaged)
+        and not reuse_existing_browser
+    ):
         browser_timer = threading.Timer(
             0.75,
             open_application_url,

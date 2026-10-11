@@ -2,6 +2,15 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.8.5] - 2026-10-11
+
+- El primer arranque manual después de actualizar reutiliza la pestaña que ya
+  estaba esperando y evita abrir una segunda ventana del navegador.
+- La supresión de apertura se consume una sola vez: los siguientes arranques
+  normales vuelven a abrir GridScope en el navegador como siempre.
+- El resultado de cada actualización identifica la versión instalada para que
+  esta detección sea precisa en las próximas versiones.
+
 ## [0.8.4] - 2026-10-11
 
 - Las carreras multiclase de iRacing muestran la posición de clase como

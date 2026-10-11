@@ -105,6 +105,8 @@ try {
         $result.status -ne "ok" -or
         $result.restarted -or
         -not $result.requiresManualStart -or
+        $result.installedVersion -ne $version -or
+        $result.manualStartConsumed -or
         $installedVersion -ne $version -or
         $runningAfterUpdate.Count -ne 0
     ) {
@@ -115,6 +117,8 @@ try {
         Estado = $result.status
         ReinicioAutomatico = $result.restarted
         ReaperturaManual = $result.requiresManualStart
+        VersionDetectada = $result.installedVersion
+        AperturaPendiente = -not $result.manualStartConsumed
         Registro = (Get-Content -LiteralPath $logPath -Raw).Trim()
         CarpetaAislada = $resolvedTestRoot
     }

@@ -137,10 +137,18 @@ try {
     }
     Write-UpdateLog "Los archivos de la nueva version se han instalado."
 
+    $installedVersionPath = Join-Path $resolvedInstallDirectory "VERSION"
+    $installedVersion = ""
+    if (Test-Path -LiteralPath $installedVersionPath -PathType Leaf) {
+        $installedVersion = (Get-Content -LiteralPath $installedVersionPath -Raw).Trim()
+    }
+
     [pscustomobject]@{
         status = "ok"
         restarted = $false
         requiresManualStart = $true
+        installedVersion = $installedVersion
+        manualStartConsumed = $false
         updatedAt = [DateTime]::UtcNow.ToString("o")
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
     Write-UpdateLog "Actualizacion instalada correctamente."

@@ -7,6 +7,7 @@ import shutil
 import struct
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 from server import (
     DataStore,
     create_oauth_authorization,
+    consume_post_update_browser_suppression,
     detect_assetto_corsa_installation,
     extract_series_logo,
     extract_track_id,
@@ -214,6 +216,57 @@ class UpdateSystemTests(unittest.TestCase):
         ):
             open_application_url(application_url)
         browser_fallback.assert_called_once_with(application_url)
+
+    def test_first_start_after_update_reuses_existing_browser_tab_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result_path = Path(directory) / "ultima-actualizacion.json"
+            result_path.write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "requiresManualStart": True,
+                        "installedVersion": "0.8.5",
+                        "manualStartConsumed": False,
+                        "updatedAt": "2026-10-11T12:00:00+00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertTrue(
+                consume_post_update_browser_suppression(
+                    result_path, current_version="0.8.5"
+                )
+            )
+            self.assertFalse(
+                consume_post_update_browser_suppression(
+                    result_path, current_version="0.8.5"
+                )
+            )
+            consumed = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertTrue(consumed["manualStartConsumed"])
+
+    def test_previous_updater_result_is_accepted_only_while_recent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result_path = Path(directory) / "ultima-actualizacion.json"
+            now = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
+            result_path.write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "requiresManualStart": True,
+                        "updatedAt": (now - timedelta(minutes=5)).isoformat(),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertTrue(
+                consume_post_update_browser_suppression(
+                    result_path,
+                    current_version="0.8.5",
+                    now=now,
+                )
+            )
 
 
 class DataStoreTests(unittest.TestCase):
