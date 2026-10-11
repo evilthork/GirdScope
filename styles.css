@@ -1345,6 +1345,7 @@ dialog::backdrop { background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
 .race-results-table .league-member-result { background: rgba(159,122,234,.08); box-shadow: inset 3px 0 var(--violet); }
 .race-results-table .league-member-result:hover { background: rgba(159,122,234,.13); }
 .race-results-table small { color: var(--subtle); font-size: 7px; }
+.race-results-table .overall-position { display: block; margin-top: 4px; white-space: nowrap; font-size: 7px; font-weight: 600; }
 .race-rival-badge { display: inline-flex; margin-left: 5px; padding: 3px 5px; color: #83adff; border-radius: 5px; background: rgba(78,145,255,.13); font-size: 6px; font-style: normal; font-weight: 800; letter-spacing: .04em; vertical-align: middle; }
 .race-league-badge { display: inline-flex; margin-left: 4px; padding: 3px 5px; color: #c3a8ff; border-radius: 5px; background: rgba(159,122,234,.13); font-size: 6px; font-style: normal; font-weight: 800; letter-spacing: .04em; vertical-align: middle; }
 .race-highlight-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 15px; margin: 0 0 11px; padding: 9px 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 9px; background: rgba(255,255,255,.02); font-size: 7px; }

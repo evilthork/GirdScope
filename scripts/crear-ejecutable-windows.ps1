@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $version = (Get-Content -LiteralPath (Join-Path $projectRoot "VERSION") -Raw).Trim()
 
-if ($version -notmatch '^\d+\.\d+\.\d+$') {
+if ($version -notmatch '^\d+\.\d+\.\d+[a-z]?$') {
     throw "VERSION no contiene una versión semántica válida."
 }
 

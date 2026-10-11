@@ -2743,6 +2743,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
     const summary = detail.summary;
     const isAssetto = event.platform === "assetto-corsa";
     const isRaceRoom = event.platform === "raceroom";
+    const isMulticlass = event.platform === "iracing" && Number(event.classCount || 0) > 1;
     document.querySelector("#raceDetailKicker").textContent =
       `Semana ${event.week} · ${formatRaceDate(event.startTime)}`;
     document.querySelector("#raceDetailTitle").textContent =
@@ -2788,6 +2789,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
           ["Split", `${event.splitNumber || "—"}${event.splitTotal ? ` / ${event.splitTotal}` : ""}`],
           ["SoF", formatInteger(event.strengthOfField)],
           ["Parrilla", event.fieldSize],
+          ...(isMulticlass ? [["Clases", event.classCount]] : []),
           ["Vueltas", event.eventLapsComplete || "—"],
           ["Vuelta rápida", formatLapTime(fastest)],
           [metricHelp("Inc. parrilla", fieldContactExplanation("iracing", "esta carrera")), `${summary.totalIncidents}x`],
@@ -2816,6 +2818,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
             ? `<span>Race hash ${escapeHtml(event.externalEventId)}</span><span>Rating y Reputation proceden del resultado público de RaceRoom</span><span>Los pilotos bajo la distancia mínima aparecen, pero no puntúan</span>`
             : `<span>Subsession ${escapeHtml(event.externalEventId)}</span>
              <span>${event.cautions || 0} cautions · ${event.cautionLaps || 0} vueltas bajo caution</span>
+             ${isMulticlass ? "<span>La posición principal corresponde a la clase; la general aparece debajo</span>" : ""}
              <span>${weather.humidity != null ? `Humedad ${weather.humidity}%` : "Clima no disponible"}</span>
              ${event.telemetryFiles?.length ? `<span class="telemetry-race-note">${event.telemetryFiles.length} IBT · ${event.telemetryFiles[0].channelCount} canales · ${event.telemetryFiles[0].tickRate} Hz</span>` : ""}`}
       </div>
@@ -2830,7 +2833,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
         <table class="race-results-table">
           <thead>
             <tr>
-              <th>Pos.</th><th>Piloto</th><th class="numeric">Salida</th><th class="numeric">± Pos.</th>
+              <th>${isMulticlass ? "Pos. clase" : "Pos."}</th><th>Piloto</th><th class="numeric">${isMulticlass ? "Salida clase" : "Salida"}</th><th class="numeric">± Pos.</th>
               <th class="numeric">Inc.</th><th class="numeric">Vueltas</th>${isAssetto ? '<th class="numeric">Válidas</th>' : '<th class="numeric">Lideradas</th>'}
               <th class="numeric">Mejor vuelta</th><th class="numeric">Media</th>${isAssetto ? `<th class="numeric">Consistencia</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("assetto-corsa"))}</th><th>Neumáticos</th><th>Coche</th>` : `<th class="numeric">Intervalo</th><th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation(isRaceRoom ? "raceroom" : "iracing"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation(isRaceRoom ? "raceroom" : "iracing"))}</th><th class="numeric">Puntos</th>`}<th>Estado</th>
             </tr>
@@ -2843,9 +2846,9 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
               const isOtherMember = leaguePosition != null && !result.isOwner && !isSelected;
               return `
               <tr class="${result.isOwner ? "owner-result" : ""} ${isSelected ? "highlighted-rival" : ""} ${isOtherMember ? "league-member-result" : ""}">
-                <td><span class="position ${result.finishPosition <= 3 ? "medal" : ""}">${result.finishPosition}</span></td>
-                <td><div class="driver-cell"><i class="avatar ${result.color}">${escapeHtml(result.initials)}</i><span><strong><button class="race-driver-profile-link" type="button" data-race-driver-profile="${result.iracingId}" aria-label="Abrir perfil de ${escapeHtml(result.name)}">${escapeHtml(result.name)}</button>${isSelected ? ' <em class="race-rival-badge">RIVAL SELECCIONADO</em>' : ""}${leaguePosition != null ? ` <em class="race-league-badge">CAMPEONATO P${leaguePosition}</em>` : ""}</strong><small>${escapeHtml(result.countryCode || result.division || driverIdentityText(result.iracingId))}${result.carNumber ? ` · #${escapeHtml(result.carNumber)}` : ""}</small></span></div></td>
-                <td class="numeric">${result.startPosition ?? "—"}</td>
+                <td><span class="position ${result.finishPosition <= 3 ? "medal" : ""}">${result.finishPosition}</span>${isMulticlass && result.overallFinishPosition ? `<small class="overall-position">General P${result.overallFinishPosition}</small>` : ""}</td>
+                <td><div class="driver-cell"><i class="avatar ${result.color}">${escapeHtml(result.initials)}</i><span><strong><button class="race-driver-profile-link" type="button" data-race-driver-profile="${result.iracingId}" aria-label="Abrir perfil de ${escapeHtml(result.name)}">${escapeHtml(result.name)}</button>${isSelected ? ' <em class="race-rival-badge">RIVAL SELECCIONADO</em>' : ""}${leaguePosition != null ? ` <em class="race-league-badge">CAMPEONATO P${leaguePosition}</em>` : ""}</strong><small>${escapeHtml(result.countryCode || result.division || driverIdentityText(result.iracingId))}${result.carNumber ? ` · #${escapeHtml(result.carNumber)}` : ""}${isMulticlass && result.className ? ` · ${escapeHtml(result.className)}` : ""}</small></span></div></td>
+                <td class="numeric">${result.startPosition ?? "—"}${isMulticlass && result.overallStartPosition ? `<small class="overall-position">General P${result.overallStartPosition}</small>` : ""}</td>
                 <td class="numeric">${result.positionChange != null ? positionChangeMarkup(result.positionChange) : "—"}</td>
                 <td class="numeric">${result.incidents}x</td>
                 <td class="numeric">${result.lapsComplete}</td>

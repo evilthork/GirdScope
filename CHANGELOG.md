@@ -2,6 +2,17 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.8.3a] - 2026-10-11
+
+- Las carreras multiclase de iRacing muestran la posición de clase como
+  resultado principal y la posición general como referencia secundaria.
+- La tabla identifica expresamente la clase del piloto y diferencia la salida
+  de clase de la salida general.
+- GridScore compara el resultado, el ritmo y el SoF contra la clase del piloto
+  en lugar de utilizar el tamaño completo de una parrilla multiclase.
+- El actualizador reconoce compilaciones de prueba con sufijo de letra para
+  validar el nuevo proceso de reapertura manual.
+
 ## [0.8.3] - 2026-10-11
 
 - El actualizador deja de intentar iniciar GridScope desde el proceso auxiliar

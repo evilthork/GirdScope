@@ -139,6 +139,18 @@ class UpdateSystemTests(unittest.TestCase):
         self.assertFalse(stable["available"])
         self.assertEqual(stable["latestVersion"], "0.7.4")
 
+    def test_lettered_test_build_is_newer_than_its_base_version(self):
+        status = update_status_from_releases(
+            [self.release("0.8.3a", prerelease=True)],
+            "beta",
+            current_version="0.8.3",
+            frozen=True,
+            platform_name="nt",
+        )
+        self.assertTrue(status["available"])
+        self.assertEqual(status["latestVersion"], "0.8.3a")
+        self.assertEqual(status["assetName"], "GridScope-0.8.3a-Windows.zip")
+
     def test_untrusted_asset_is_never_installable(self):
         release = self.release(
             "0.7.5",
@@ -436,6 +448,54 @@ class DataStoreTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["customerId"], "100001")
         self.assertEqual(result["results"][0]["finishPosition"], 1)
         self.assertEqual(result["results"][0]["startPosition"], 3)
+
+    def test_iracing_multiclass_uses_class_position_and_class_field(self):
+        fixture = Path(__file__).parent / "fixtures" / "iracing-result.json"
+        payload = json.loads(fixture.read_text(encoding="utf-8"))
+        payload["subsession_id"] = 98765439
+        payload["car_classes"] = [
+            {
+                "car_class_id": 4010,
+                "name": "GT Class",
+                "strength_of_field": 1800,
+                "num_entries": 3,
+            },
+            {
+                "car_class_id": 9999,
+                "name": "Prototype Class",
+                "strength_of_field": 2200,
+                "num_entries": 15,
+            },
+        ]
+        race_results = payload["session_results"][1]["results"]
+        owner = race_results[0]
+        owner["finish_position"] = 15
+        owner["finish_position_in_class"] = 1
+        owner["starting_position"] = 17
+        owner["starting_position_in_class"] = 2
+        race_results[1]["car_class_id"] = 9999
+
+        normalized = normalize_iracing_export(payload)
+        self.assertEqual(normalized["results"][0]["finishPosition"], 2)
+        self.assertEqual(normalized["results"][0]["startPosition"], 3)
+
+        self.store.import_iracing_result("multiclass.json", payload)
+        state = self.store.get_state()
+        race = next(
+            item
+            for item in self.store.get_races()["races"]
+            if item["externalEventId"] == "98765439"
+        )
+        detail = self.store.get_race_detail(race["id"])
+        owner_detail = next(result for result in detail["results"] if result["isOwner"])
+
+        self.assertEqual(detail["event"]["classCount"], 2)
+        self.assertEqual(owner_detail["finishPosition"], 2)
+        self.assertEqual(owner_detail["overallFinishPosition"], 16)
+        self.assertEqual(owner_detail["classFieldSize"], 3)
+        self.assertEqual(owner_detail["classStrengthOfField"], 1800)
+        self.assertEqual(owner_detail["scoreComponents"]["finish"], 50.0)
+        self.assertEqual(state["settings"]["ownerIracingId"], "100001")
 
     def test_search_results_index_explains_that_full_event_results_are_required(self):
         payload = [

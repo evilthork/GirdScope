@@ -41,7 +41,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.8.3"
+APP_VERSION = "0.8.3a"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -127,11 +127,17 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def semantic_version(value: str) -> tuple[int, int, int]:
-    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(value).strip())
+def semantic_version(value: str) -> tuple[int, int, int, int]:
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)([a-z])?", str(value).strip())
     if not match:
         raise ValueError("La versión publicada no tiene un formato válido")
-    return tuple(int(part) for part in match.groups())
+    major, minor, patch, suffix = match.groups()
+    return (
+        int(major),
+        int(minor),
+        int(patch),
+        ord(suffix) - ord("a") + 1 if suffix else 0,
+    )
 
 
 def update_status_from_releases(
@@ -145,7 +151,7 @@ def update_status_from_releases(
         raise ValueError("El canal de actualizaciones no es válido")
     if not isinstance(releases, list):
         raise ValueError("GitHub ha devuelto una lista de versiones no válida")
-    candidates: list[tuple[tuple[int, int, int], dict[str, Any]]] = []
+    candidates: list[tuple[tuple[int, int, int, int], dict[str, Any]]] = []
     for release in releases:
         if not isinstance(release, dict) or release.get("draft"):
             continue
@@ -170,7 +176,7 @@ def update_status_from_releases(
             "installReason": "No hay versiones publicadas en este canal.",
         }
     latest, release = candidates[0]
-    latest_text = ".".join(str(part) for part in latest)
+    latest_text = str(release.get("tag_name", "")).strip().removeprefix("v")
     expected_asset_name = f"GridScope-{latest_text}-Windows.zip"
     asset = next(
         (
@@ -2094,6 +2100,23 @@ def extract_iracing_rich_data(payload: Any) -> dict[str, Any]:
         if race_session
         else pick_value(root, "results", "entries", default=[])
     )
+    class_rows = pick_value(root, "car_classes", "carClasses", default=[])
+    class_details: dict[str, dict[str, Any]] = {}
+    if isinstance(class_rows, list):
+        for car_class in class_rows:
+            if not isinstance(car_class, dict):
+                continue
+            class_id = str(
+                pick_value(car_class, "car_class_id", "carClassId", "id", default="")
+            )
+            if class_id:
+                class_details[class_id] = car_class
+    result_class_counts = Counter(
+        str(pick_value(entry, "car_class_id", "carClassId", default=""))
+        for entry in (results if isinstance(results, list) else [])
+        if isinstance(entry, dict)
+        and str(pick_value(entry, "car_class_id", "carClassId", default=""))
+    )
     drivers: dict[str, dict[str, Any]] = {}
     if isinstance(results, list):
         for entry in results:
@@ -2116,7 +2139,39 @@ def extract_iracing_rich_data(payload: Any) -> dict[str, Any]:
             interval_raw = as_int(
                 pick_value(entry, "class_interval", "interval"), 0
             )
+            class_id = str(
+                pick_value(entry, "car_class_id", "carClassId", default="")
+            )
+            class_info = class_details.get(class_id, {})
             drivers[customer_id] = {
+                "overallFinishPosition": display_position(
+                    entry, "finish_position", "finishPosition", "position"
+                ) or None,
+                "classFinishPosition": display_position(
+                    entry, "finish_position_in_class", "finishPositionInClass"
+                ) or None,
+                "overallStartPosition": display_position(
+                    entry, "starting_position", "startingPosition"
+                ) or None,
+                "classStartPosition": display_position(
+                    entry,
+                    "starting_position_in_class",
+                    "startingPositionInClass",
+                ) or None,
+                "classFieldSize": as_int(
+                    pick_value(class_info, "num_entries", "numEntries"), 0
+                )
+                or result_class_counts.get(class_id)
+                or None,
+                "classStrengthOfField": as_int(
+                    pick_value(
+                        class_info,
+                        "strength_of_field",
+                        "strengthOfField",
+                    ),
+                    0,
+                )
+                or None,
                 "carId": as_int(pick_value(entry, "car_id", "carId"), 0) or None,
                 "carName": str(
                     pick_value(entry, "car_name", "carName", default="")
@@ -2178,6 +2233,7 @@ def extract_iracing_rich_data(payload: Any) -> dict[str, Any]:
     if not isinstance(weather, dict):
         weather = {}
     event = {
+        "classCount": len(result_class_counts),
         "endTime": str(pick_value(root, "end_time", "endTime", default="")),
         "eventLapsComplete": as_int(
             pick_value(root, "event_laps_complete", "eventLapsComplete"), 0
@@ -5663,7 +5719,7 @@ class DataStore:
                 FROM race_results rr
                 JOIN drivers d ON d.id = rr.driver_id
                 WHERE rr.event_id = ?
-                ORDER BY rr.finish_position, d.name
+                ORDER BY rr.class_name, rr.finish_position, d.name
                 """,
                 (event_id,),
             ).fetchall()
@@ -5851,23 +5907,31 @@ class DataStore:
                     )
                 )
         elif event["platform"] == "iracing":
-            field_best_laps = [
-                float(result["bestLapTime"])
-                for result in results
-                if as_float(result.get("bestLapTime")) is not None
-                and float(result["bestLapTime"]) > 0
-            ]
             score_event = {
                 "fieldSize": event["field_size"],
                 "strengthOfField": event["strength_of_field"],
                 **rich["event"],
             }
             for result in results:
+                class_best_laps = [
+                    float(candidate["bestLapTime"])
+                    for candidate in results
+                    if candidate.get("classId") == result.get("classId")
+                    and as_float(candidate.get("bestLapTime")) is not None
+                    and float(candidate["bestLapTime"]) > 0
+                ]
+                result_score_event = {
+                    **score_event,
+                    "fieldSize": result.get("classFieldSize")
+                    or score_event["fieldSize"],
+                    "strengthOfField": result.get("classStrengthOfField")
+                    or score_event["strengthOfField"],
+                }
                 result.update(
                     calculate_iracing_scores(
                         result,
-                        score_event,
-                        field_best_laps,
+                        result_score_event,
+                        class_best_laps,
                         recurrent_scores.get(result["_driverDbId"]),
                     )
                 )
