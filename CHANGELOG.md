@@ -2,7 +2,7 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
-## [0.8.3a] - 2026-10-11
+## [0.8.4] - 2026-10-11
 
 - Las carreras multiclase de iRacing muestran la posición de clase como
   resultado principal y la posición general como referencia secundaria.
