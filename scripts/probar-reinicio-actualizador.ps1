@@ -67,7 +67,8 @@ try {
             "-InstallDirectory", $installDirectory,
             "-ExecutableName", "GridScope.exe",
             "-TargetProcessId", "$($server.Id)",
-            "-Port", "$Port"
+            "-Port", "$Port",
+            "-NoRestart", "-Silent"
         ) `
         -PassThru `
         -WindowStyle Hidden
@@ -86,17 +87,34 @@ try {
     if (-not $updater.WaitForExit(120000)) {
         throw "El actualizador temporal no ha terminado."
     }
-    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/health" -TimeoutSec 5
     $resultPath = Join-Path $profileDirectory "GridScope\updates\ultima-actualizacion.json"
     $logPath = Join-Path $profileDirectory "GridScope\updates\ultima-actualizacion.log"
     $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
-    if ($result.status -ne "ok" -or -not $result.restarted -or $health.version -ne $version) {
-        throw "La prueba real de reinicio no ha terminado correctamente."
+    $installedVersion = (Get-Content -LiteralPath (Join-Path $installDirectory "VERSION") -Raw).Trim()
+    $runningAfterUpdate = @(
+        Get-CimInstance Win32_Process -Filter "Name = 'GridScope.exe'" |
+            Where-Object {
+                $_.ExecutablePath -and
+                [IO.Path]::GetFullPath($_.ExecutablePath).Equals(
+                    [IO.Path]::GetFullPath($executable),
+                    [StringComparison]::OrdinalIgnoreCase
+                )
+            }
+    )
+    if (
+        $result.status -ne "ok" -or
+        $result.restarted -or
+        -not $result.requiresManualStart -or
+        $installedVersion -ne $version -or
+        $runningAfterUpdate.Count -ne 0
+    ) {
+        throw "La prueba de actualización con reapertura manual no ha terminado correctamente."
     }
     [pscustomobject]@{
-        Version = $health.version
+        Version = $installedVersion
         Estado = $result.status
-        Reiniciado = $result.restarted
+        ReinicioAutomatico = $result.restarted
+        ReaperturaManual = $result.requiresManualStart
         Registro = (Get-Content -LiteralPath $logPath -Raw).Trim()
         CarpetaAislada = $resolvedTestRoot
     }

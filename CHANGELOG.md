@@ -2,6 +2,17 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.8.3] - 2026-10-11
+
+- El actualizador deja de intentar iniciar GridScope desde el proceso auxiliar
+  de Windows después de sustituir el ejecutable.
+- Al terminar muestra un mensaje de confirmación que pide volver a abrir la
+  aplicación manualmente.
+- La pestaña que permanece abierta comprueba cuándo vuelve el servidor local y
+  se recarga automáticamente al detectar la nueva versión.
+- Se elimina el falso error provocado cuando Windows impedía al asistente
+  iniciar el ejecutable recién actualizado.
+
 ## [0.8.2] - 2026-10-11
 
 - La configuración distingue claramente el Customer ID del piloto y el

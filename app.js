@@ -482,7 +482,7 @@ document.querySelector("#installUpdateButton").addEventListener("click", async (
     return;
   }
   const accepted = window.confirm(
-    `Se descargará GridScope ${currentUpdateStatus.latestVersion}, se guardará una copia de la versión actual y la aplicación se reiniciará. Tus datos locales no se modificarán.\n\n¿Continuar?`
+    `Se descargará GridScope ${currentUpdateStatus.latestVersion} y se guardará una copia de la versión actual. GridScope se cerrará para instalarla y después tendrás que volver a abrirlo. Tus datos locales no se modificarán.\n\n¿Continuar?`
   );
   if (!accepted) return;
   const overlay = document.querySelector("#updateInstallingOverlay");
@@ -493,15 +493,35 @@ document.querySelector("#installUpdateButton").addEventListener("click", async (
       method: "POST",
       body: JSON.stringify({ channel: updatePreferences.channel })
     });
+    waitForUpdatedServer(currentUpdateStatus.latestVersion);
     document.querySelector("#updateInstallingTitle").textContent = "Cerrando GridScope para actualizar…";
     document.querySelector("#updateInstallingDetail").textContent =
-      "El asistente sustituirá el ejecutable, conservará una copia anterior y volverá a abrir la aplicación.";
+      "Cuando aparezca el mensaje de actualización completada, vuelve a abrir GridScope. Esta pestaña se recargará sola.";
   } catch (error) {
     overlay.hidden = true;
     setButtonBusy(button, false);
     showToast("No se ha podido iniciar la actualización", error.message);
   }
 });
+
+function waitForUpdatedServer(expectedVersion) {
+  const checkServer = async () => {
+    try {
+      const response = await fetch(`/api/health?update=${Date.now()}`, { cache: "no-store" });
+      if (response.ok) {
+        const health = await response.json();
+        if (health.version === expectedVersion) {
+          window.location.reload();
+          return;
+        }
+      }
+    } catch (_error) {
+      // Es normal mientras GridScope permanece cerrado durante la actualización.
+    }
+    window.setTimeout(checkServer, 1500);
+  };
+  window.setTimeout(checkServer, 1500);
+}
 
 document.querySelector("#openUpdateSettingsButton").addEventListener("click", () => {
   document.querySelector("#updateNotice").hidden = true;

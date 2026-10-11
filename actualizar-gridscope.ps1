@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory = $true)]
     [int]$TargetProcessId,
     [int]$Port = 4173,
-    [switch]$NoRestart
+    [switch]$NoRestart,
+    [switch]$Silent
 )
 
 $ErrorActionPreference = "Stop"
@@ -136,92 +137,28 @@ try {
     }
     Write-UpdateLog "Los archivos de la nueva version se han instalado."
 
-    if (-not $NoRestart) {
-        $expectedVersionPath = Join-Path $resolvedInstallDirectory "VERSION"
-        $expectedVersion = (
-            Get-Content -LiteralPath $expectedVersionPath -Raw
-        ).Trim()
-        $restartSucceeded = $false
-        $lastRestartError = "El servidor local no llego a responder."
-        for ($attempt = 0; $attempt -lt 3 -and -not $restartSucceeded; $attempt++) {
-            $runningProcesses = Get-InstalledGridScopeProcesses -ExecutablePath $currentExecutable
-            if ($runningProcesses) {
-                Write-UpdateLog "Cerrando un intento de arranque anterior antes de reintentar."
-                foreach ($runningProcess in $runningProcesses) {
-                    Stop-Process -Id $runningProcess.ProcessId -Force -ErrorAction SilentlyContinue
-                }
-                Start-Sleep -Milliseconds 500
-            }
-            Write-UpdateLog "Intento de arranque $($attempt + 1) de 3."
-            try {
-                $startedProcess = Start-Process `
-                    -FilePath $currentExecutable `
-                    -WorkingDirectory $resolvedInstallDirectory `
-                    -ArgumentList "--host", "127.0.0.1", "--port", "$Port", "--no-open-browser" `
-                    -PassThru
-                Write-UpdateLog "Proceso iniciado con PID $($startedProcess.Id)."
-            } catch {
-                $lastRestartError = "No se ha podido iniciar el ejecutable: $($_.Exception.Message)"
-                Write-UpdateLog $lastRestartError
-                continue
-            }
-            $restartDeadline = [DateTime]::UtcNow.AddSeconds(30)
-            while ([DateTime]::UtcNow -lt $restartDeadline) {
-                try {
-                    $health = Invoke-RestMethod `
-                        -Uri "http://127.0.0.1:$Port/api/health" `
-                        -TimeoutSec 2
-                    if (
-                        $health.status -eq "ok" -and
-                        $health.version -eq $expectedVersion
-                    ) {
-                        $restartSucceeded = $true
-                        Write-UpdateLog "GridScope $expectedVersion responde correctamente en el puerto $Port."
-                        break
-                    }
-                    if ($health.version -ne $expectedVersion) {
-                        $lastRestartError = "El puerto $Port responde con la version $($health.version), no con $expectedVersion."
-                    }
-                } catch {
-                    $health = $null
-                    $lastRestartError = "El servidor todavia no responde en el puerto $Port."
-                }
-                if ($startedProcess.HasExited) {
-                    $lastRestartError = "GridScope se cerro durante el arranque con codigo $($startedProcess.ExitCode)."
-                    Write-UpdateLog $lastRestartError
-                    break
-                }
-                if (-not $restartSucceeded) {
-                    Start-Sleep -Milliseconds 400
-                }
-            }
-            if (-not $restartSucceeded) {
-                Write-UpdateLog "El intento $($attempt + 1) ha fallado: $lastRestartError"
-            }
-        }
-        if (-not $restartSucceeded) {
-            throw (
-                "La actualizacion se ha instalado, pero GridScope no ha " +
-                "podido volver a abrirse automaticamente. $lastRestartError"
-            )
-        }
-    }
-    if (-not $NoRestart) {
-        try {
-            Start-Process "http://127.0.0.1:$Port"
-        } catch {
-            throw (
-                "GridScope se ha actualizado y el servidor esta activo, " +
-                "pero no se ha podido abrir el navegador automaticamente."
-            )
-        }
-    }
     [pscustomobject]@{
         status = "ok"
-        restarted = (-not $NoRestart)
+        restarted = $false
+        requiresManualStart = $true
         updatedAt = [DateTime]::UtcNow.ToString("o")
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
     Write-UpdateLog "Actualizacion instalada correctamente."
+    if (-not $Silent) {
+        Add-Type -AssemblyName System.Windows.Forms
+        $dialogTitle = "Actualizaci$([char]0x00F3)n de GridScope"
+        $dialogMessage = (
+            "GridScope se ha actualizado correctamente.`n`n" +
+            "Vuelve a abrir GridScope. La pesta$([char]0x00F1)a del navegador " +
+            "se actualizar$([char]0x00E1) autom$([char]0x00E1)ticamente."
+        )
+        [System.Windows.Forms.MessageBox]::Show(
+            $dialogMessage,
+            $dialogTitle,
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+    }
 } catch {
     $message = $_.Exception.Message
     [pscustomobject]@{

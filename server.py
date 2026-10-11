@@ -41,7 +41,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.8.2"
+APP_VERSION = "0.8.3"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -352,6 +352,7 @@ def start_windows_update(status: dict[str, Any]) -> dict[str, Any]:
         executable_path.name,
         "-TargetProcessId",
         str(os.getpid()),
+        "-NoRestart",
     ]
     creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     subprocess.Popen(
@@ -363,7 +364,7 @@ def start_windows_update(status: dict[str, Any]) -> dict[str, Any]:
     return {
         "started": True,
         "version": status["latestVersion"],
-        "message": "La actualización se instalará al cerrar GridScope.",
+        "message": "La actualización se instalará al cerrar GridScope. Después deberás volver a abrirlo.",
     }
 
 

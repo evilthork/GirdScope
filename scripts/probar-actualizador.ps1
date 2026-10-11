@@ -50,7 +50,8 @@ try {
         -InstallDirectory $installDirectory `
         -ExecutableName "GridScope.exe" `
         -TargetProcessId 2147483647 `
-        -NoRestart
+        -NoRestart `
+        -Silent
 
     $current = (Get-Content -LiteralPath (Join-Path $installDirectory "GridScope.exe") -Raw).Trim()
     $previous = (Get-Content -LiteralPath (Join-Path $installDirectory "GridScope.previous.exe") -Raw).Trim()
@@ -68,8 +69,8 @@ try {
     if ($version -ne "9.9.9" -or $result.status -ne "ok") {
         throw "El actualizador no ha completado correctamente la prueba."
     }
-    if ($result.restarted) {
-        throw "La prueba aislada con NoRestart no debe iniciar la aplicación."
+    if ($result.restarted -or -not $result.requiresManualStart) {
+        throw "La actualización debe requerir que el usuario vuelva a abrir GridScope."
     }
 
     [pscustomobject]@{
