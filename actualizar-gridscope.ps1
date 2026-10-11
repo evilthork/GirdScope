@@ -7,6 +7,7 @@ param(
     [string]$ExecutableName,
     [Parameter(Mandatory = $true)]
     [int]$TargetProcessId,
+    [int]$Port = 4173,
     [switch]$NoRestart
 )
 
@@ -18,6 +19,13 @@ $resultPath = Join-Path $updatesDirectory "ultima-actualizacion.json"
 $extractRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
     "gridscope-update-" + [guid]::NewGuid().ToString("N")
 )
+
+function Write-UpdateLog {
+    param([Parameter(Mandatory = $true)][string]$Message)
+
+    $line = "[{0}] {1}" -f [DateTime]::Now.ToString("yyyy-MM-dd HH:mm:ss"), $Message
+    Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
+}
 
 function Get-InstalledGridScopeProcesses {
     param([Parameter(Mandatory = $true)][string]$ExecutablePath)
@@ -38,17 +46,19 @@ function Get-InstalledGridScopeProcesses {
 }
 
 try {
+    Set-Content -LiteralPath $logPath -Value "" -Encoding UTF8
+    Write-UpdateLog "Iniciando actualizacion de GridScope."
     $resolvedPackage = (Resolve-Path -LiteralPath $PackagePath).Path
     $resolvedInstallDirectory = (Resolve-Path -LiteralPath $InstallDirectory).Path
     if (-not $resolvedPackage.EndsWith("-Windows.zip", [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "El archivo descargado no es un paquete Windows de GridScope."
     }
     if ($ExecutableName -ne "GridScope.exe") {
-        throw "El ejecutable de destino no es válido."
+        throw "El ejecutable de destino no es valido."
     }
     $currentExecutable = Join-Path $resolvedInstallDirectory $ExecutableName
     if (-not (Test-Path -LiteralPath $currentExecutable -PathType Leaf)) {
-        throw "No se encuentra la instalación actual de GridScope."
+        throw "No se encuentra la instalacion actual de GridScope."
     }
 
     $deadline = [DateTime]::UtcNow.AddSeconds(90)
@@ -67,6 +77,7 @@ try {
     ) {
         throw "GridScope no se ha cerrado a tiempo."
     }
+    Write-UpdateLog "La version anterior se ha cerrado."
 
     New-Item -ItemType Directory -Path $extractRoot -Force | Out-Null
     $resolvedExtractRoot = (Resolve-Path -LiteralPath $extractRoot).Path
@@ -75,7 +86,7 @@ try {
         $resolvedSystemTemp,
         [System.StringComparison]::OrdinalIgnoreCase
     )) {
-        throw "La extracción no se ha creado en la carpeta temporal."
+        throw "La extraccion no se ha creado en la carpeta temporal."
     }
 
     Expand-Archive -LiteralPath $resolvedPackage -DestinationPath $resolvedExtractRoot
@@ -123,6 +134,7 @@ try {
                 -Force
         }
     }
+    Write-UpdateLog "Los archivos de la nueva version se han instalado."
 
     if (-not $NoRestart) {
         $expectedVersionPath = Join-Path $resolvedInstallDirectory "VERSION"
@@ -130,48 +142,77 @@ try {
             Get-Content -LiteralPath $expectedVersionPath -Raw
         ).Trim()
         $restartSucceeded = $false
+        $lastRestartError = "El servidor local no llego a responder."
         for ($attempt = 0; $attempt -lt 3 -and -not $restartSucceeded; $attempt++) {
-            if (-not (Get-InstalledGridScopeProcesses -ExecutablePath $currentExecutable)) {
-                Start-Process `
+            $runningProcesses = Get-InstalledGridScopeProcesses -ExecutablePath $currentExecutable
+            if ($runningProcesses) {
+                Write-UpdateLog "Cerrando un intento de arranque anterior antes de reintentar."
+                foreach ($runningProcess in $runningProcesses) {
+                    Stop-Process -Id $runningProcess.ProcessId -Force -ErrorAction SilentlyContinue
+                }
+                Start-Sleep -Milliseconds 500
+            }
+            Write-UpdateLog "Intento de arranque $($attempt + 1) de 3."
+            try {
+                $startedProcess = Start-Process `
                     -FilePath $currentExecutable `
                     -WorkingDirectory $resolvedInstallDirectory `
-                    -ArgumentList "--no-open-browser"
+                    -ArgumentList "--host", "127.0.0.1", "--port", "$Port", "--no-open-browser" `
+                    -PassThru
+                Write-UpdateLog "Proceso iniciado con PID $($startedProcess.Id)."
+            } catch {
+                $lastRestartError = "No se ha podido iniciar el ejecutable: $($_.Exception.Message)"
+                Write-UpdateLog $lastRestartError
+                continue
             }
-            $restartDeadline = [DateTime]::UtcNow.AddSeconds(20)
+            $restartDeadline = [DateTime]::UtcNow.AddSeconds(30)
             while ([DateTime]::UtcNow -lt $restartDeadline) {
                 try {
                     $health = Invoke-RestMethod `
-                        -Uri "http://127.0.0.1:4173/api/health" `
+                        -Uri "http://127.0.0.1:$Port/api/health" `
                         -TimeoutSec 2
                     if (
                         $health.status -eq "ok" -and
                         $health.version -eq $expectedVersion
                     ) {
                         $restartSucceeded = $true
+                        Write-UpdateLog "GridScope $expectedVersion responde correctamente en el puerto $Port."
                         break
+                    }
+                    if ($health.version -ne $expectedVersion) {
+                        $lastRestartError = "El puerto $Port responde con la version $($health.version), no con $expectedVersion."
                     }
                 } catch {
                     $health = $null
+                    $lastRestartError = "El servidor todavia no responde en el puerto $Port."
+                }
+                if ($startedProcess.HasExited) {
+                    $lastRestartError = "GridScope se cerro durante el arranque con codigo $($startedProcess.ExitCode)."
+                    Write-UpdateLog $lastRestartError
+                    break
                 }
                 if (-not $restartSucceeded) {
                     Start-Sleep -Milliseconds 400
                 }
             }
+            if (-not $restartSucceeded) {
+                Write-UpdateLog "El intento $($attempt + 1) ha fallado: $lastRestartError"
+            }
         }
         if (-not $restartSucceeded) {
             throw (
-                "La actualización se ha instalado, pero GridScope no ha " +
-                "podido volver a abrirse automáticamente."
+                "La actualizacion se ha instalado, pero GridScope no ha " +
+                "podido volver a abrirse automaticamente. $lastRestartError"
             )
         }
     }
     if (-not $NoRestart) {
         try {
-            Start-Process "http://127.0.0.1:4173"
+            Start-Process "http://127.0.0.1:$Port"
         } catch {
             throw (
-                "GridScope se ha actualizado y el servidor estÃ¡ activo, " +
-                "pero no se ha podido abrir el navegador automÃ¡ticamente."
+                "GridScope se ha actualizado y el servidor esta activo, " +
+                "pero no se ha podido abrir el navegador automaticamente."
             )
         }
     }
@@ -180,8 +221,7 @@ try {
         restarted = (-not $NoRestart)
         updatedAt = [DateTime]::UtcNow.ToString("o")
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
-    "Actualización instalada correctamente." |
-        Set-Content -LiteralPath $logPath -Encoding UTF8
+    Write-UpdateLog "Actualizacion instalada correctamente."
 } catch {
     $message = $_.Exception.Message
     [pscustomobject]@{
@@ -189,11 +229,11 @@ try {
         message = $message
         updatedAt = [DateTime]::UtcNow.ToString("o")
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
-    $message | Set-Content -LiteralPath $logPath -Encoding UTF8
+    Write-UpdateLog "ERROR: $message"
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show(
         "No se ha podido actualizar GridScope.`n`n$message",
-        "Actualización de GridScope",
+        "Actualizacion de GridScope",
         [System.Windows.Forms.MessageBoxButtons]::OK,
         [System.Windows.Forms.MessageBoxIcon]::Error
     ) | Out-Null

@@ -66,6 +66,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\crear-version-publica.ps1") -Destination (Join-Path $sourceFolder "scripts")
     Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\probar-paquete-publico.ps1") -Destination (Join-Path $sourceFolder "scripts")
     Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\probar-actualizador.ps1") -Destination (Join-Path $sourceFolder "scripts")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\probar-reinicio-actualizador.ps1") -Destination (Join-Path $sourceFolder "scripts")
     Copy-Item -LiteralPath (Join-Path $projectRoot "tests\__init__.py") -Destination (Join-Path $sourceFolder "tests")
     Copy-Item -LiteralPath (Join-Path $projectRoot "tests\test_server.py") -Destination (Join-Path $sourceFolder "tests")
     Copy-Item -LiteralPath (Join-Path $projectRoot "tests\fixtures\iracing-result.json") -Destination (Join-Path $sourceFolder "tests\fixtures")

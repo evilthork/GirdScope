@@ -2,6 +2,19 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.8.1] - 2026-10-11
+
+- El actualizador reinicia GridScope indicando explícitamente la dirección y
+  el puerto del servidor local.
+- Si un intento de arranque falla, cierra únicamente los procesos de esa
+  instalación y realiza un nuevo intento real.
+- La comprobación de salud espera al servidor y verifica que la versión
+  iniciada coincide con la recién instalada.
+- El registro de actualización conserva cada intento y explica el motivo
+  concreto si el reinicio no puede completarse.
+- Se añade una prueba aislada que sustituye el ejecutable, reinicia el servidor
+  y comprueba su respuesta sin utilizar los datos del usuario.
+
 ## [0.8.0] - 2026-10-11
 
 - La aplicación reorganiza sus páginas principales mediante pestañas para
