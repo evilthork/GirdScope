@@ -602,6 +602,7 @@ svg {
 .season-overview-card footer strong { flex: 0 0 auto; color: var(--accent-bright); font-size: 7px; }
 
 .content-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(310px, .75fr); gap: 15px; }
+.overview-classification-grid { grid-template-columns: minmax(0, 1fr); }
 .right-column { display: grid; gap: 15px; }
 .panel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 20px 21px 15px; }
@@ -835,6 +836,84 @@ tbody tr:last-child td { border-bottom: 0; }
 .trend.negative { color: #ec6d6d; background: rgba(236,109,109,.08); }
 
 .mini-league-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.content-tabs { position: sticky; top: 82px; z-index: 8; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 7px; margin: 18px 0 14px; padding: 6px; border: 1px solid var(--border); border-radius: 13px; background: rgba(15,17,19,.94); box-shadow: 0 10px 28px rgba(0,0,0,.24); backdrop-filter: blur(14px); }
+.view-content-tabs { margin-top: 0; }
+.content-tab { display: flex; align-items: baseline; justify-content: center; gap: 8px; min-height: 43px; padding: 8px 14px; color: var(--muted); border: 1px solid transparent; border-radius: 9px; background: transparent; cursor: pointer; transition: .18s ease; }
+.content-tab:hover { color: var(--text); background: rgba(255,255,255,.03); }
+.content-tab.active { color: var(--text); border-color: rgba(var(--series-accent-rgb), .34); background: rgba(var(--series-accent-rgb), .1); box-shadow: inset 0 -2px var(--series-accent); }
+.content-tab span { font: 800 10px/1 "Manrope", sans-serif; }
+.content-tab small { color: var(--subtle); font-size: 7px; }
+.content-tab.active small { color: var(--series-accent); }
+.content-tab-panel[hidden] { display: none !important; }
+.content-tab-panel.active { animation: content-tab-in .18s ease; }
+@keyframes content-tab-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.evolution-panel { overflow: hidden; }
+.evolution-heading { align-items: flex-start; }
+.chart-range-control button { min-width: 42px; }
+.evolution-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0 17px 17px; }
+.evolution-chart-card { min-width: 0; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.018); }
+.evolution-chart-card:last-child { grid-column: 1 / -1; }
+.evolution-chart-card.empty { display: flex; flex-direction: column; }
+.evolution-chart-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.evolution-chart-title small { display: block; color: var(--series-accent); font-size: 6px; font-weight: 800; letter-spacing: .14em; }
+.evolution-chart-title h4 { margin: 4px 0 0; font: 800 14px/1.2 "Manrope", sans-serif; }
+.evolution-chart-title p { max-width: 440px; margin: 5px 0 0; color: var(--muted); font-size: 7px; line-height: 1.45; }
+.evolution-chart-title > span { flex: 0 0 auto; text-align: right; }
+.evolution-chart-title > span strong, .evolution-chart-title > span em { display: block; }
+.evolution-chart-title > span strong { color: var(--text); font: 800 18px/1 "Manrope", sans-serif; }
+.evolution-chart-title > span em { margin-top: 5px; color: var(--muted); font-size: 7px; font-style: normal; }
+.evolution-chart-title > span em.positive { color: var(--green); }
+.evolution-chart-title > span em.negative { color: #ec6d6d; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; color: var(--muted); font-size: 7px; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.chart-legend i { width: 14px; height: 3px; border-radius: 999px; background: var(--chart-color); }
+.chart-series-0 { --chart-color: var(--series-accent); }
+.chart-series-1 { --chart-color: #5d91ff; }
+.evolution-chart { display: block; width: 100%; height: auto; margin-top: 3px; overflow: visible; }
+.chart-grid-line line { stroke: rgba(255,255,255,.075); stroke-width: 1; stroke-dasharray: 4 5; }
+.chart-grid-line text, .chart-date-label { fill: var(--subtle); font-size: 9px; }
+.chart-line { fill: none; stroke: var(--chart-color); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.chart-line.chart-series-1 { stroke-width: 2; stroke-dasharray: 6 5; opacity: .9; }
+.chart-point { fill: var(--chart-color); stroke: #101214; stroke-width: 2; cursor: pointer; transition: r .15s ease, filter .15s ease; }
+.chart-point:hover, .chart-point:focus { r: 6px; filter: drop-shadow(0 0 5px var(--chart-color)); outline: none; }
+.chart-interaction-hint { display: block; margin-top: -5px; color: var(--subtle); font-size: 6px; text-align: right; }
+.chart-empty { flex: 1; min-height: 190px; display: grid; place-items: center; margin-top: 12px; color: var(--subtle); border: 1px dashed var(--border); border-radius: 10px; font-size: 8px; text-align: center; }
+.evolution-support { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 15px; }
+.comparison-charts-panel { overflow: hidden; }
+.comparison-charts-heading { align-items: flex-start; }
+.comparison-charts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0 17px 17px; }
+.comparison-chart-title small { display: block; color: var(--series-accent); font-size: 6px; font-weight: 800; letter-spacing: .14em; }
+.comparison-chart-title h4 { margin: 4px 0 0; font: 800 14px/1.2 "Manrope", sans-serif; }
+.comparison-chart-title p { max-width: 520px; margin: 5px 0 0; color: var(--muted); font-size: 7px; line-height: 1.5; }
+.comparison-rival-chart { min-width: 0; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.018); }
+.comparison-rival-chart.empty { display: flex; flex-direction: column; }
+.comparison-rival-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 13px 0 10px; color: var(--muted); font-size: 7px; }
+.comparison-rival-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.comparison-rival-legend i { width: 12px; height: 4px; border-radius: 999px; }
+.comparison-rival-legend .owner, .comparison-duel-bar .owner { background: var(--green); }
+.comparison-rival-legend .rival, .comparison-duel-bar .rival { background: #ec6d6d; }
+.comparison-rival-legend .tie, .comparison-duel-bar .tie { background: #69717c; }
+.comparison-rival-bars, .comparison-advantage-bars { display: grid; gap: 4px; }
+.comparison-rival-bars button, .comparison-advantage-bars button { display: grid; grid-template-columns: minmax(105px, .8fr) minmax(130px, 1.4fr) 54px; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 6px 8px; color: var(--text); text-align: left; border: 0; border-radius: 8px; background: transparent; cursor: pointer; transition: .15s ease; }
+.comparison-rival-bars button:hover, .comparison-rival-bars button:focus, .comparison-advantage-bars button:hover, .comparison-advantage-bars button:focus { background: rgba(var(--series-accent-rgb), .07); outline: none; }
+.comparison-rival-name { min-width: 0; }
+.comparison-rival-name strong, .comparison-rival-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comparison-rival-name strong { font-size: 8px; }
+.comparison-rival-name small { margin-top: 2px; color: var(--subtle); font-size: 6px; }
+.comparison-duel-bar { display: flex; width: 100%; height: 9px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.045); }
+.comparison-duel-bar i { height: 100%; }
+.comparison-duel-score { text-align: right; font-size: 8px; }
+.comparison-duel-score em, .comparison-duel-score b { font-style: normal; }
+.comparison-duel-score em { color: var(--green); }
+.comparison-duel-score b { color: #ec6d6d; }
+.comparison-advantage-scale { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 8px; margin: 13px 62px 9px 115px; color: var(--subtle); font-size: 6px; }
+.comparison-advantage-scale span:last-child { text-align: right; }
+.comparison-advantage-scale i { height: 13px; background: rgba(255,255,255,.16); }
+.comparison-advantage-track { position: relative; display: block; height: 9px; border-radius: 999px; background: linear-gradient(90deg, rgba(236,109,109,.08) 0 49.6%, rgba(255,255,255,.16) 49.6% 50.4%, rgba(78,207,139,.08) 50.4% 100%); }
+.comparison-advantage-track i { position: absolute; top: 0; height: 100%; border-radius: 999px; }
+.comparison-advantage-track i.positive { background: var(--green); }
+.comparison-advantage-track i.negative { background: #ec6d6d; }
+.comparison-advantage-bars button > strong { font-size: 7px; text-align: right; }
 .automatic-championship-label { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 4px 0 10px; }
 .automatic-championship-label span { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .automatic-championship-label small { color: var(--subtle); font-size: 7px; }
@@ -883,6 +962,12 @@ tbody tr:last-child td { border-bottom: 0; }
 .mini-league-explainer { display: flex; gap: 10px; margin-bottom: 12px; padding: 10px 13px; color: var(--muted); border: 1px solid rgba(var(--series-accent-rgb), .16); border-radius: 10px; background: rgba(var(--series-accent-rgb), .04); font-size: 8px; line-height: 1.45; }
 .mini-league-explainer strong { flex: 0 0 auto; color: var(--text); }
 .mini-league-ranking-panel { overflow: hidden; }
+.table-pagination { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 15px; color: var(--subtle); border-top: 1px solid var(--border); font-size: 8px; }
+.table-pagination > div { display: flex; align-items: center; gap: 9px; }
+.table-pagination strong { min-width: 85px; color: var(--muted); font-size: 8px; text-align: center; }
+.table-pagination .secondary-button { min-height: 30px; padding: 7px 11px; font-size: 8px; }
+.table-pagination button:disabled { opacity: .35; cursor: default; }
+.driver-empty-state { grid-column: 1 / -1; min-height: 180px; }
 .mini-league-ranking-rule { display: flex; align-items: center; gap: 10px; }
 .mini-league-ranking-rule label { display: flex; align-items: center; gap: 8px; color: var(--series-accent); font-size: 7px; font-weight: 800; }
 .mini-league-ranking-rule input { width: 52px; height: 31px; padding: 0 7px; text-align: center; }
@@ -1921,9 +2006,22 @@ dialog .telemetry-file-list article { padding: 10px; }
   .race-card { grid-template-columns: 52px 88px 1fr 100px 20px; }
   .race-track-thumbnail { width: 88px; }
   .race-card-winner { display: none; }
+  .evolution-chart-grid { grid-template-columns: 1fr; }
+  .evolution-chart-card:last-child { grid-column: auto; }
+  .evolution-support { grid-template-columns: 1fr; }
+  .comparison-charts-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 700px) {
+  .content-tabs { top: 68px; }
+  .content-tab { align-items: center; flex-direction: column; gap: 4px; }
+  .evolution-heading { align-items: flex-start; flex-direction: column; }
+  .chart-range-control { width: 100%; }
+  .chart-range-control button { flex: 1; }
+  .comparison-charts-heading { align-items: flex-start; flex-direction: column; }
+  .comparison-advantage-scale { margin-left: 115px; }
+  .table-pagination { align-items: stretch; flex-direction: column; }
+  .table-pagination > div { justify-content: space-between; }
   .simulator-gateway { padding: 22px 16px 34px; }
   .gateway-panel { margin-top: 52px; }
   .gateway-copy h1 { font-size: 39px; }
@@ -2033,6 +2131,8 @@ dialog .telemetry-file-list article { padding: 10px; }
   .owner-track-detail-hero > div { max-width: 100%; padding: 24px 20px 110px; }
   .owner-track-detail-map { top: auto; right: 20px; bottom: 12px; width: 150px; height: 86px; }
   .owner-track-detail-stats { grid-template-columns: 1fr; }
+  .comparison-rival-bars button, .comparison-advantage-bars button { grid-template-columns: minmax(90px, .9fr) minmax(95px, 1.2fr) 48px; gap: 7px; }
+  .comparison-advantage-scale { margin-left: 98px; margin-right: 56px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

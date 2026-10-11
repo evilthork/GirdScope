@@ -91,10 +91,26 @@ const activeMiniLeaguePeriods = {
   eternal: "eternal"
 };
 let miniLeagueSort = { key: "position", direction: "asc" };
+const MINI_LEAGUE_PAGE_SIZE = 10;
+let miniLeaguePage = 1;
+let activeMiniLeagueContentTab = localStorage.getItem("gridscope-mini-content-tab") || "summary";
+if (!["summary", "ranking", "races"].includes(activeMiniLeagueContentTab)) {
+  activeMiniLeagueContentTab = "summary";
+}
 let miniLeagueMinimumRaces = Math.min(
   999,
   Math.max(1, Number(localStorage.getItem("gridscope-mini-minimum-races")) || 2)
 );
+const LIST_PAGE_SIZES = { ownerRaces: 10, rounds: 8, races: 10, drivers: 12, progress: 12, rivals: 15, singleRivals: 15, miniEvents: 12 };
+let listPages = { ownerRaces: 1, rounds: 1, races: 1, drivers: 1, progress: 1, rivals: 1, singleRivals: 1, miniEvents: 1 };
+let activeDriverFilter = localStorage.getItem("gridscope-driver-filter") || "recurrent";
+if (!["recurrent", "single", "all"].includes(activeDriverFilter)) activeDriverFilter = "recurrent";
+let activeSettingsTab = localStorage.getItem("gridscope-settings-tab") || "general";
+if (!["general", "sources", "application"].includes(activeSettingsTab)) activeSettingsTab = "general";
+let activeChartWindow = localStorage.getItem("gridscope-chart-window") || "10";
+if (!["5", "10", "20", "all"].includes(activeChartWindow)) activeChartWindow = "10";
+let activeComparisonChartWindow = localStorage.getItem("gridscope-comparison-chart-window") || "10";
+if (!["5", "10", "20", "all"].includes(activeComparisonChartWindow)) activeComparisonChartWindow = "10";
 let currentSessionDetail = null;
 let toastTimeout;
 let automaticScanRunning = false;
@@ -104,6 +120,62 @@ const activeActivities = new Map();
 let updatePreferences = { automatic: true, channel: "beta" };
 let currentUpdateStatus = null;
 let installedAppVersion = "";
+
+function paginationMarkup(target, page, totalItems, pageSize, noun) {
+  if (!totalItems) return `<span>0 ${noun}</span>`;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const first = (safePage - 1) * pageSize + 1;
+  const last = Math.min(safePage * pageSize, totalItems);
+  return `
+    <span>${first}–${last} de ${totalItems} ${noun}</span>
+    <div>
+      <button class="secondary-button" type="button" data-list-page="${target}" data-page-direction="previous" ${safePage <= 1 ? "disabled" : ""}>Anterior</button>
+      <strong>Página ${safePage} de ${totalPages}</strong>
+      <button class="secondary-button" type="button" data-list-page="${target}" data-page-direction="next" ${safePage >= totalPages ? "disabled" : ""}>Siguiente</button>
+    </div>`;
+}
+
+function selectSectionTab(group, tab, { remember = true } = {}) {
+  const tabs = document.querySelector(`[data-section-tabs="${group}"]`);
+  if (!tabs) return;
+  const requested = tabs.querySelector(`[data-section-tab="${tab}"]`)
+    ? tab
+    : tabs.querySelector("[data-section-tab]")?.dataset.sectionTab;
+  tabs.querySelectorAll("[data-section-tab]").forEach((button) => {
+    const active = button.dataset.sectionTab === requested;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.querySelectorAll(`[data-section-panel^="${group}:"]`).forEach((panel) => {
+    const active = panel.dataset.sectionPanel === `${group}:${requested}`;
+    panel.hidden = !active;
+    panel.classList.toggle("active", active);
+  });
+  if (remember) localStorage.setItem(`gridscope-section-${group}`, requested);
+}
+
+function renderAllSectionTabs() {
+  document.querySelectorAll("[data-section-tabs]").forEach((tabs) => {
+    const group = tabs.dataset.sectionTabs;
+    const fallback = tabs.querySelector("[data-section-tab]")?.dataset.sectionTab;
+    selectSectionTab(group, localStorage.getItem(`gridscope-section-${group}`) || fallback, { remember: false });
+  });
+}
+
+function renderSettingsTab(tab = activeSettingsTab) {
+  activeSettingsTab = tab;
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+    const active = button.dataset.settingsTab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  const platform = appState.settings.platform || appState.league.platform || "iracing";
+  document.querySelectorAll("[data-settings-group]").forEach((card) => {
+    const simulatorMatches = !card.dataset.simulatorOnly || card.dataset.simulatorOnly === platform;
+    card.hidden = card.dataset.settingsGroup !== tab || !simulatorMatches;
+  });
+}
 
 function renderActivityIndicator() {
   const activity = Array.from(activeActivities.values()).at(-1);
@@ -643,6 +715,7 @@ async function selectLeague(leagueId) {
     method: "PUT",
     body: JSON.stringify({ leagueId: Number(leagueId) })
   });
+  Object.keys(listPages).forEach((key) => { listPages[key] = 1; });
   setLeagueMenuOpen(false);
   await loadState({ quiet: true });
 }
@@ -1087,15 +1160,22 @@ function renderRanking(mode = appState.settings.rankingMode || "weekly") {
   rankingLabel.textContent = mode === "weekly" ? "Media semanal" : "Media / carrera";
   const minimum = requiredWeeks();
   let officialPosition = 0;
-
-  rankingBody.innerHTML = rankDrivers(mode).map((driver) => {
+  const ranked = rankDrivers(mode).map((driver) => {
     const provisional = driver.weeks < minimum;
     if (!provisional) officialPosition += 1;
+    return { driver, provisional, officialPosition };
+  });
+  const ownerId = String(appState.settings.ownerIracingId);
+  const visible = ranked.slice(0, 10);
+  const ownerEntry = ranked.find(({ driver }) => String(driver.id) === ownerId);
+  if (ownerEntry && !visible.some(({ driver }) => String(driver.id) === ownerId)) visible.push(ownerEntry);
+
+  rankingBody.innerHTML = visible.map(({ driver, provisional, officialPosition: position }) => {
     const metric = mode === "weekly" ? driver.weekly : driver.races;
     const hasResults = driver.racesCount > 0;
     return `
       <tr class="${provisional ? "provisional-row" : ""}">
-        <td><span class="position ${officialPosition <= 3 && !provisional ? "medal" : ""}">${provisional ? "—" : officialPosition}</span></td>
+        <td><span class="position ${position <= 3 && !provisional ? "medal" : ""}">${provisional ? "—" : position}</span></td>
         <td>
           <div class="driver-cell">
             <i class="avatar ${driver.color}">${driver.initials}</i>
@@ -1120,7 +1200,15 @@ function renderRanking(mode = appState.settings.rankingMode || "weekly") {
 
 function renderRounds() {
   const roundList = document.querySelector("#roundList");
-  roundList.innerHTML = appState.rounds.slice().reverse().map((round) => `
+  const rounds = appState.rounds.slice().reverse();
+  const totalPages = Math.max(1, Math.ceil(rounds.length / LIST_PAGE_SIZES.rounds));
+  listPages.rounds = Math.min(listPages.rounds, totalPages);
+  const visibleRounds = rounds.slice(
+    (listPages.rounds - 1) * LIST_PAGE_SIZES.rounds,
+    listPages.rounds * LIST_PAGE_SIZES.rounds
+  );
+  document.querySelector("#roundsTabCount").textContent = `${rounds.length} semana${rounds.length === 1 ? "" : "s"}`;
+  roundList.innerHTML = visibleRounds.map((round) => `
     <article class="round-card" data-session-week="${round.week}" tabindex="0" role="button" aria-label="Abrir detalle de la semana ${round.week}">
       <div class="round-week">S${String(round.week).padStart(2, "0")}</div>
       <img class="track-thumbnail" src="${trackImageUrl(round.track, round.layout)}" alt="" loading="lazy">
@@ -1132,6 +1220,9 @@ function renderRounds() {
       <button class="icon-button" type="button" aria-label="Ver jornada ${round.week}"><svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button>
     </article>
   `).join("");
+  document.querySelector("#roundPagination").innerHTML = paginationMarkup(
+    "rounds", listPages.rounds, rounds.length, LIST_PAGE_SIZES.rounds, "jornadas"
+  );
 }
 
 function positionChangeMarkup(value) {
@@ -1140,8 +1231,145 @@ function positionChangeMarkup(value) {
   return '<span class="result-change">0</span>';
 }
 
+function movingAverage(values, windowSize = 3) {
+  return values.map((value, index) => {
+    if (value == null) return null;
+    const windowValues = values
+      .slice(Math.max(0, index - windowSize + 1), index + 1)
+      .filter((item) => item != null);
+    return windowValues.length
+      ? windowValues.reduce((total, item) => total + Number(item), 0) / windowValues.length
+      : null;
+  });
+}
+
+function evolutionChartMarkup({ title, description, races, series, formatter = formatDecimal, invert = false, official = false, minimumZero = false }) {
+  const width = 720;
+  const height = 245;
+  const plot = { left: 54, right: 18, top: 24, bottom: 40 };
+  const values = series.flatMap((item) => item.values).filter((value) => value != null && Number.isFinite(Number(value))).map(Number);
+  if (!values.length) {
+    return `<article class="evolution-chart-card empty"><div class="evolution-chart-title"><div><small>${official ? "VALOR OFICIAL" : "MÉTRICA GRIDSCOPE"}</small><h4>${escapeHtml(title)}</h4></div></div><p>${escapeHtml(description)}</p><div class="chart-empty">No hay suficientes valores guardados para dibujar esta evolución.</div></article>`;
+  }
+  let minimum = Math.min(...values);
+  let maximum = Math.max(...values);
+  const naturalRange = maximum - minimum;
+  const padding = naturalRange ? naturalRange * 0.12 : Math.max(Math.abs(maximum) * 0.05, 1);
+  minimum = minimumZero ? Math.max(0, minimum - padding) : minimum - padding;
+  maximum += padding;
+  const range = maximum - minimum || 1;
+  const plotWidth = width - plot.left - plot.right;
+  const plotHeight = height - plot.top - plot.bottom;
+  const x = (index) => plot.left + (races.length <= 1 ? plotWidth / 2 : index / (races.length - 1) * plotWidth);
+  const y = (value) => plot.top + (invert ? (Number(value) - minimum) / range : (maximum - Number(value)) / range) * plotHeight;
+  const pathFor = (item) => {
+    let started = false;
+    return item.values.map((value, index) => {
+      if (value == null || !Number.isFinite(Number(value))) {
+        started = false;
+        return "";
+      }
+      const command = started ? "L" : "M";
+      started = true;
+      return `${command}${x(index).toFixed(1)},${y(value).toFixed(1)}`;
+    }).join(" ");
+  };
+  const grid = [0, .5, 1].map((ratio) => {
+    const value = invert ? minimum + range * ratio : maximum - range * ratio;
+    const lineY = plot.top + plotHeight * ratio;
+    return `<g class="chart-grid-line"><line x1="${plot.left}" y1="${lineY}" x2="${width - plot.right}" y2="${lineY}"></line><text x="${plot.left - 9}" y="${lineY + 3}" text-anchor="end">${escapeHtml(formatter(value))}</text></g>`;
+  }).join("");
+  const paths = series.map((item, seriesIndex) => `
+    <path class="chart-line chart-series-${seriesIndex}" d="${pathFor(item)}"></path>
+    ${item.values.map((value, index) => value == null ? "" : `
+      <circle class="chart-point chart-series-${seriesIndex}" cx="${x(index)}" cy="${y(value)}" r="4" tabindex="0" role="button" data-chart-race-id="${races[index].eventId}" aria-label="${escapeHtml(`${item.label}: ${formatter(value)} en ${races[index].track}`)}">
+        <title>${escapeHtml(`${formatRaceDate(races[index].startTime)} · ${races[index].track} · ${item.label}: ${formatter(value)}`)}</title>
+      </circle>`).join("")}
+  `).join("");
+  const latestSeries = series[0].values.filter((value) => value != null);
+  const first = latestSeries[0];
+  const latest = latestSeries.at(-1);
+  const change = first == null || latest == null ? null : latest - first;
+  const dateLabels = races.length
+    ? `<text class="chart-date-label" x="${plot.left}" y="${height - 12}" text-anchor="start">${escapeHtml(formatRaceDate(races[0].startTime))}</text><text class="chart-date-label" x="${width - plot.right}" y="${height - 12}" text-anchor="end">${escapeHtml(formatRaceDate(races.at(-1).startTime))}</text>`
+    : "";
+  return `
+    <article class="evolution-chart-card">
+      <div class="evolution-chart-title">
+        <div><small>${official ? "VALOR OFICIAL" : "MÉTRICA GRIDSCOPE"}</small><h4>${escapeHtml(title)}</h4><p>${escapeHtml(description)}</p></div>
+        <span><strong>${latest == null ? "—" : escapeHtml(formatter(latest))}</strong><em class="${change > 0 ? "positive" : change < 0 ? "negative" : ""}">${change == null ? "Sin variación" : formatSigned(change)}</em></span>
+      </div>
+      <div class="chart-legend">${series.map((item, index) => `<span><i class="chart-series-${index}"></i>${escapeHtml(item.label)}</span>`).join("")}</div>
+      <svg class="evolution-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Evolución de ${escapeHtml(title)}">
+        ${grid}${paths}${dateLabels}
+      </svg>
+      <small class="chart-interaction-hint">Pulsa un punto para abrir esa carrera.</small>
+    </article>`;
+}
+
+function renderEvolutionCharts() {
+  const container = document.querySelector("#evolutionCharts");
+  document.querySelectorAll("[data-chart-window]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.chartWindow === activeChartWindow);
+  });
+  if (!ownerSeasonAnalysis?.races?.length) {
+    container.innerHTML = '<p class="session-empty">No hay carreras personales suficientes para mostrar una evolución.</p>';
+    return;
+  }
+  const platform = appState.settings.platform || appState.league.platform || "iracing";
+  const allRaces = ownerSeasonAnalysis.races.slice().reverse();
+  const amount = activeChartWindow === "all" ? allRaces.length : Number(activeChartWindow);
+  const races = allRaces.slice(-amount);
+  const gridScores = races.map((race) => race.gridScore == null ? null : Number(race.gridScore));
+  const cleanliness = races.map((race) => race.cleanlinessScore == null ? null : Number(race.cleanlinessScore));
+  const cards = [];
+  if (platform !== "assetto-corsa") {
+    cards.push(evolutionChartMarkup({
+      title: platform === "raceroom" ? "Rating" : "iRating",
+      description: platform === "raceroom" ? "Valor competitivo oficial publicado por RaceRoom." : "Valor competitivo oficial de iRacing después de cada carrera.",
+      races,
+      series: [{ label: platform === "raceroom" ? "Rating" : "iRating", values: races.map((race) => race.newIRating) }],
+      formatter: (value) => formatInteger(value),
+      official: true
+    }));
+    cards.push(evolutionChartMarkup({
+      title: platform === "raceroom" ? "Reputation" : "Safety Rating",
+      description: platform === "raceroom" ? "Valor oficial de conducta publicado por RaceRoom." : "Safety Rating oficial registrado después de cada carrera.",
+      races,
+      series: [{ label: platform === "raceroom" ? "Reputation" : "Safety Rating", values: races.map((race) => race.newSafetyRating) }],
+      formatter: (value) => formatDecimal(value),
+      official: true
+    }));
+  }
+  cards.push(evolutionChartMarkup({
+    title: "GridScore",
+    description: "Rendimiento calculado por GridScope en cada carrera y tendencia móvil de tres resultados.",
+    races,
+    series: [{ label: "Por carrera", values: gridScores }, { label: "Tendencia (3)", values: movingAverage(gridScores) }],
+    minimumZero: true
+  }));
+  cards.push(evolutionChartMarkup({
+    title: "Limpieza GridScope",
+    description: "Índice propio de limpieza por carrera y tendencia móvil de tres resultados.",
+    races,
+    series: [{ label: "Por carrera", values: cleanliness }, { label: "Tendencia (3)", values: movingAverage(cleanliness) }],
+    minimumZero: true
+  }));
+  cards.push(evolutionChartMarkup({
+    title: "Salida y llegada",
+    description: "Compara tu posición de parrilla con la posición final; cuanto más arriba, mejor.",
+    races,
+    series: [{ label: "Salida", values: races.map((race) => race.startPosition) }, { label: "Meta", values: races.map((race) => race.finishPosition) }],
+    formatter: (value) => `P${Math.round(value)}`,
+    invert: true
+  }));
+  document.querySelector("#evolutionDescription").textContent = `${races.length} carrera${races.length === 1 ? "" : "s"} mostrada${races.length === 1 ? "" : "s"} · las métricas oficiales y las de GridScope se presentan por separado.`;
+  container.innerHTML = cards.join("");
+}
+
 function renderRaceExplorer() {
   const container = document.querySelector("#raceExplorer");
+  document.querySelector("#racesTabCount").textContent = `${raceAnalysis.races.length} resultado${raceAnalysis.races.length === 1 ? "" : "s"}`;
   if (!raceAnalysis.races.length) {
     container.innerHTML = `
       <article class="empty-archive">
@@ -1149,9 +1377,16 @@ function renderRaceExplorer() {
         <h3>Todavía no hay carreras</h3>
         <p>Importa archivos eventresult para crear el historial detallado.</p>
       </article>`;
+    document.querySelector("#raceExplorerPagination").innerHTML = "";
     return;
   }
-  container.innerHTML = raceAnalysis.races.map((race) => {
+  const totalPages = Math.max(1, Math.ceil(raceAnalysis.races.length / LIST_PAGE_SIZES.races));
+  listPages.races = Math.min(listPages.races, totalPages);
+  const visibleRaces = raceAnalysis.races.slice(
+    (listPages.races - 1) * LIST_PAGE_SIZES.races,
+    listPages.races * LIST_PAGE_SIZES.races
+  );
+  container.innerHTML = visibleRaces.map((race) => {
     const owner = race.ownerResult;
     const split = race.splitNumber
       ? `Split ${race.splitNumber}${race.splitTotal ? ` / ${race.splitTotal}` : ""}`
@@ -1174,6 +1409,101 @@ function renderRaceExplorer() {
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
       </button>`;
   }).join("");
+  document.querySelector("#raceExplorerPagination").innerHTML = paginationMarkup(
+    "races", listPages.races, raceAnalysis.races.length, LIST_PAGE_SIZES.races, "carreras"
+  );
+}
+
+function rivalBalanceChartMarkup(rivals) {
+  if (!rivals.length) {
+    return '<article class="comparison-rival-chart empty"><div><small>DUELOS DIRECTOS</small><h4>Balance contra recurrentes</h4></div><p class="chart-empty">Se necesitan al menos dos carreras compartidas con un mismo rival.</p></article>';
+  }
+  const visible = rivals.slice().sort((a, b) => b.meetings - a.meetings || b.winRate - a.winRate).slice(0, 10);
+  return `
+    <article class="comparison-rival-chart">
+      <div class="comparison-chart-title"><div><small>DUELOS DIRECTOS</small><h4>Balance contra recurrentes</h4><p>Reparte cada coincidencia según quién terminó delante. Pulsa un rival para abrir el historial compartido.</p></div></div>
+      <div class="comparison-rival-legend"><span><i class="owner"></i>Tú delante</span><span><i class="rival"></i>Rival delante</span><span><i class="tie"></i>Empates</span></div>
+      <div class="comparison-rival-bars">
+        ${visible.map((rival) => {
+          const total = Math.max(1, rival.ownerAhead + rival.rivalAhead + (rival.ties || 0));
+          return `<button type="button" data-comparison-rival-id="${escapeHtml(rival.iracingId)}" aria-label="Abrir comparativa con ${escapeHtml(rival.name)}">
+            <span class="comparison-rival-name"><strong>${escapeHtml(rival.name)}</strong><small>${rival.meetings} encuentro${rival.meetings === 1 ? "" : "s"}</small></span>
+            <span class="comparison-duel-bar" aria-hidden="true"><i class="owner" style="width:${rival.ownerAhead / total * 100}%"></i><i class="rival" style="width:${rival.rivalAhead / total * 100}%"></i><i class="tie" style="width:${(rival.ties || 0) / total * 100}%"></i></span>
+            <strong class="comparison-duel-score"><em>${rival.ownerAhead}</em>–<b>${rival.rivalAhead}</b></strong>
+          </button>`;
+        }).join("")}
+      </div>
+    </article>`;
+}
+
+function rivalAdvantageChartMarkup(rivals) {
+  if (!rivals.length) {
+    return '<article class="comparison-rival-chart empty"><div><small>DIFERENCIA MEDIA</small><h4>Ventaja de posición</h4></div><p class="chart-empty">Todavía no hay rivales recurrentes para comparar.</p></article>';
+  }
+  const visible = rivals.slice().sort((a, b) => Math.abs(b.averagePositionAdvantage) - Math.abs(a.averagePositionAdvantage)).slice(0, 10);
+  const maximum = Math.max(1, ...visible.map((rival) => Math.abs(rival.averagePositionAdvantage || 0)));
+  return `
+    <article class="comparison-rival-chart">
+      <div class="comparison-chart-title"><div><small>DIFERENCIA MEDIA</small><h4>Ventaja de posición</h4><p>Promedio de tu posición final menos la del rival: a la derecha terminas más adelante; a la izquierda, el rival.</p></div></div>
+      <div class="comparison-advantage-scale"><span>Rival delante</span><i></i><span>Tú delante</span></div>
+      <div class="comparison-advantage-bars">
+        ${visible.map((rival) => {
+          const value = Number(rival.averagePositionAdvantage) || 0;
+          const width = Math.abs(value) / maximum * 50;
+          return `<button type="button" data-comparison-rival-id="${escapeHtml(rival.iracingId)}" aria-label="Abrir comparativa con ${escapeHtml(rival.name)}">
+            <span class="comparison-rival-name"><strong>${escapeHtml(rival.name)}</strong><small>${rival.meetings} encuentros</small></span>
+            <span class="comparison-advantage-track" aria-hidden="true"><i class="${value >= 0 ? "positive" : "negative"}" style="width:${width}%;${value >= 0 ? "left:50%" : `right:50%`}"></i></span>
+            <strong class="${value > 0 ? "comparison-win" : value < 0 ? "comparison-loss" : ""}">${formatSigned(value, " pos.")}</strong>
+          </button>`;
+        }).join("")}
+      </div>
+    </article>`;
+}
+
+function renderComparisonCharts() {
+  const container = document.querySelector("#comparisonCharts");
+  if (!container) return;
+  document.querySelectorAll("[data-comparison-chart-window]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.comparisonChartWindow === activeComparisonChartWindow);
+  });
+  const allRaces = raceAnalysis.races.filter((race) => race.ownerResult).slice().reverse();
+  const amount = activeComparisonChartWindow === "all" ? allRaces.length : Number(activeComparisonChartWindow);
+  const sourceRaces = allRaces.slice(-amount);
+  const races = sourceRaces.map((race) => ({ ...race, eventId: race.id }));
+  const platform = rivalAnalysis.platform || appState.settings.platform || appState.league.platform || "iracing";
+  const incidentDescription = platform === "assetto-corsa"
+    ? "Incidentes registrados por Content Manager en cada carrera y tendencia móvil de tres resultados."
+    : platform === "raceroom"
+      ? "Incident Points publicados por RaceRoom y tendencia móvil de tres resultados."
+      : "Incidentes oficiales de iRacing y tendencia móvil de tres resultados.";
+  const recurrentRivals = rivalAnalysis.rivals.filter((rival) => rival.meetings >= 2);
+  const incidents = sourceRaces.map((race) => race.ownerResult.incidents);
+  const cards = [
+    evolutionChartMarkup({
+      title: "Salida y llegada",
+      description: "Muestra si avanzaste o perdiste posiciones en cada carrera; cuanto más arriba, mejor.",
+      races,
+      series: [
+        { label: "Salida", values: sourceRaces.map((race) => race.ownerResult.startPosition) },
+        { label: "Meta", values: sourceRaces.map((race) => race.ownerResult.finishPosition) }
+      ],
+      formatter: (value) => `P${Math.round(value)}`,
+      invert: true
+    }),
+    evolutionChartMarkup({
+      title: "Incidentes por carrera",
+      description: incidentDescription,
+      races,
+      series: [{ label: "Por carrera", values: incidents }, { label: "Tendencia (3)", values: movingAverage(incidents) }],
+      formatter: (value) => `${formatDecimal(value)}x`,
+      invert: true,
+      minimumZero: true
+    }),
+    rivalBalanceChartMarkup(recurrentRivals),
+    rivalAdvantageChartMarkup(recurrentRivals)
+  ];
+  document.querySelector("#comparisonChartsDescription").textContent = `${sourceRaces.length} carrera${sourceRaces.length === 1 ? "" : "s"} visible${sourceRaces.length === 1 ? "" : "s"} · ${recurrentRivals.length} rival${recurrentRivals.length === 1 ? "" : "es"} con dos coincidencias o más.`;
+  container.innerHTML = cards.join("");
 }
 
 function renderRivals() {
@@ -1189,8 +1519,14 @@ function renderRivals() {
   `;
   const progressBody = document.querySelector("#raceProgressBody");
   const ownerRaces = raceAnalysis.races.filter((race) => race.ownerResult);
+  const progressPages = Math.max(1, Math.ceil(ownerRaces.length / LIST_PAGE_SIZES.progress));
+  listPages.progress = Math.min(listPages.progress, progressPages);
+  const visibleOwnerRaces = ownerRaces.slice().reverse().slice(
+    (listPages.progress - 1) * LIST_PAGE_SIZES.progress,
+    listPages.progress * LIST_PAGE_SIZES.progress
+  );
   progressBody.innerHTML = ownerRaces.length
-    ? ownerRaces.slice().reverse().map((race) => `
+    ? visibleOwnerRaces.map((race) => `
       <tr data-progress-race-id="${race.id}" tabindex="0" role="button" aria-label="Abrir carrera en ${escapeHtml(race.track)}">
         <td><strong>${escapeHtml(race.track)}</strong><small class="table-subline">S${race.week} · ${formatRaceDate(race.startTime)}</small></td>
         <td class="numeric">${formatInteger(race.strengthOfField)}</td>
@@ -1203,12 +1539,21 @@ function renderRivals() {
         <td class="numeric">${formatSigned(race.ownerResult.safetyRatingChange)}</td>
       </tr>`).join("")
     : '<tr><td colspan="9">Tu ID no aparece en las carreras de esta serie.</td></tr>';
+  document.querySelector("#raceProgressPagination").innerHTML = paginationMarkup(
+    "progress", listPages.progress, ownerRaces.length, LIST_PAGE_SIZES.progress, "carreras"
+  );
+  const recurrentRivals = rivalAnalysis.rivals.filter((rival) => rival.meetings >= 2);
+  const singleRivals = rivalAnalysis.rivals.filter((rival) => rival.meetings === 1);
+  document.querySelector("#recurrentRivalCount").textContent = `${recurrentRivals.length} piloto${recurrentRivals.length === 1 ? "" : "s"}`;
+  document.querySelector("#singleRivalCount").textContent = `${singleRivals.length} piloto${singleRivals.length === 1 ? "" : "s"}`;
   const body = document.querySelector("#rivalsBody");
-  if (!rivalAnalysis.rivals.length) {
-    body.innerHTML = '<tr><td colspan="9">No hay coincidencias para el piloto de referencia en esta serie.</td></tr>';
-    return;
-  }
-  body.innerHTML = rivalAnalysis.rivals.map((rival) => `
+  const recurrentPages = Math.max(1, Math.ceil(recurrentRivals.length / LIST_PAGE_SIZES.rivals));
+  listPages.rivals = Math.min(listPages.rivals, recurrentPages);
+  const visibleRecurrent = recurrentRivals.slice(
+    (listPages.rivals - 1) * LIST_PAGE_SIZES.rivals,
+    listPages.rivals * LIST_PAGE_SIZES.rivals
+  );
+  body.innerHTML = visibleRecurrent.length ? visibleRecurrent.map((rival) => `
     <tr class="rival-row" data-rival-id="${rival.iracingId}" tabindex="0">
       <td>
         <div class="driver-cell">
@@ -1229,7 +1574,31 @@ function renderRivals() {
           : '<span class="trend neutral">Estable</span>'}</td>
       <td><button class="icon-button small" type="button" aria-label="Ver coincidencias con ${escapeHtml(rival.name)}"><svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button></td>
     </tr>
-  `).join("");
+  `).join("") : '<tr><td colspan="9">Todavía no hay rivales con dos o más coincidencias en esta serie.</td></tr>';
+  document.querySelector("#rivalsPagination").innerHTML = paginationMarkup(
+    "rivals", listPages.rivals, recurrentRivals.length, LIST_PAGE_SIZES.rivals, "rivales"
+  );
+
+  const singleBody = document.querySelector("#singleRivalsBody");
+  const singlePages = Math.max(1, Math.ceil(singleRivals.length / LIST_PAGE_SIZES.singleRivals));
+  listPages.singleRivals = Math.min(listPages.singleRivals, singlePages);
+  const visibleSingles = singleRivals.slice(
+    (listPages.singleRivals - 1) * LIST_PAGE_SIZES.singleRivals,
+    listPages.singleRivals * LIST_PAGE_SIZES.singleRivals
+  );
+  singleBody.innerHTML = visibleSingles.length ? visibleSingles.map((rival) => `
+    <tr class="rival-row" data-rival-id="${rival.iracingId}" tabindex="0">
+      <td><div class="driver-cell"><i class="avatar ${rival.color}">${escapeHtml(rival.initials)}</i><span><strong>${escapeHtml(rival.name)}</strong><small>${escapeHtml(driverIdentityText(rival.iracingId))}</small></span></div></td>
+      <td class="numeric comparison-win">${rival.ownerAhead}</td>
+      <td class="numeric comparison-loss">${rival.rivalAhead}</td>
+      <td class="numeric">${formatSigned(rival.averagePositionAdvantage, " pos.")}</td>
+      <td class="numeric">${formatDecimal(rival.averageOwnerIncidents)}x / ${formatDecimal(rival.averageRivalIncidents)}x</td>
+      <td><button class="icon-button small" type="button" aria-label="Ver coincidencia con ${escapeHtml(rival.name)}"><svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button></td>
+    </tr>`).join("") : '<tr><td colspan="6">No hay rivales de una sola coincidencia.</td></tr>';
+  document.querySelector("#singleRivalsPagination").innerHTML = paginationMarkup(
+    "singleRivals", listPages.singleRivals, singleRivals.length, LIST_PAGE_SIZES.singleRivals, "rivales"
+  );
+  renderComparisonCharts();
 }
 
 function openRivalDetail(iracingId) {
@@ -1505,6 +1874,8 @@ function renderMiniLeagues() {
   }).join("");
   const summary = league.summary || {};
   const classification = miniLeagueClassification(league);
+  document.querySelector("#miniLeagueRankingTabCount").textContent = `${league.participants.length} piloto${league.participants.length === 1 ? "" : "s"}`;
+  document.querySelector("#miniLeagueRacesTabCount").textContent = `${league.events.length} carrera${league.events.length === 1 ? "" : "s"}`;
   const ownerParticipant = league.participants.find((participant) => participant.isOwner);
   const ownerOfficialPosition = ownerParticipant
     ? classification.positions.get(String(ownerParticipant.iracingId))
@@ -1598,12 +1969,21 @@ function renderMiniLeagues() {
       ? miniLeagueSort.direction === "asc" ? "↑" : "↓"
       : "↕";
   });
+  const paginatedParticipants = sortedParticipants.slice(
+    (miniLeaguePage - 1) * MINI_LEAGUE_PAGE_SIZE,
+    miniLeaguePage * MINI_LEAGUE_PAGE_SIZE
+  );
+  const totalPages = Math.max(1, Math.ceil(sortedParticipants.length / MINI_LEAGUE_PAGE_SIZE));
+  if (miniLeaguePage > totalPages) {
+    miniLeaguePage = totalPages;
+    return renderMiniLeagues();
+  }
   const tableParticipants = ownerParticipant
     ? [
         { participant: ownerParticipant, pinned: true },
-        ...sortedParticipants.map((participant) => ({ participant, pinned: false }))
+        ...paginatedParticipants.map((participant) => ({ participant, pinned: false }))
       ]
-    : sortedParticipants.map((participant) => ({ participant, pinned: false }));
+    : paginatedParticipants.map((participant) => ({ participant, pinned: false }));
   body.innerHTML = league.participants.length
     ? tableParticipants.map(({ participant, pinned }) => {
       const officialPosition = classification.positions.get(String(participant.iracingId));
@@ -1630,8 +2010,23 @@ function renderMiniLeagues() {
       </tr>`;
     }).join("")
     : `<tr><td colspan="${isAssetto ? 12 : 14}">${isCustom ? "No hay carreras con al menos dos de los pilotos configurados." : "Todavía no hay suficientes coincidencias recurrentes en este periodo."}</td></tr>`;
+  const pageStart = sortedParticipants.length
+    ? (miniLeaguePage - 1) * MINI_LEAGUE_PAGE_SIZE + 1
+    : 0;
+  const pageEnd = Math.min(miniLeaguePage * MINI_LEAGUE_PAGE_SIZE, sortedParticipants.length);
+  document.querySelector("#miniLeaguePageSummary").textContent = `${pageStart}–${pageEnd} de ${sortedParticipants.length} pilotos`;
+  document.querySelector("#miniLeaguePageNumber").textContent = `Página ${miniLeaguePage} de ${totalPages}`;
+  document.querySelector("#miniLeaguePreviousPage").disabled = miniLeaguePage <= 1;
+  document.querySelector("#miniLeagueNextPage").disabled = miniLeaguePage >= totalPages;
+  document.querySelector("#miniLeaguePagination").hidden = sortedParticipants.length <= MINI_LEAGUE_PAGE_SIZE;
+  const eventPages = Math.max(1, Math.ceil(league.events.length / LIST_PAGE_SIZES.miniEvents));
+  listPages.miniEvents = Math.min(listPages.miniEvents, eventPages);
+  const visibleEvents = league.events.slice(
+    (listPages.miniEvents - 1) * LIST_PAGE_SIZES.miniEvents,
+    listPages.miniEvents * LIST_PAGE_SIZES.miniEvents
+  );
   document.querySelector("#miniLeagueEvents").innerHTML = league.events.length
-    ? league.events.map((race) => `
+    ? visibleEvents.map((race) => `
       <button type="button" data-mini-race-id="${race.eventId}">
         <span class="mini-event-date">${formatRaceDate(race.startTime)}</span>
         <span class="mini-event-main"><strong>${escapeHtml(race.track)}</strong><small>${escapeHtml(race.seriesName)} · ${escapeHtml(race.layout || "Trazado principal")}</small></span>
@@ -1640,7 +2035,24 @@ function renderMiniLeagues() {
         <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
       </button>`).join("")
     : `<article class="empty-archive"><h3>Sin carreras puntuables</h3><p>${isCustom ? "Revisa las series, las fechas y los pilotos seleccionados." : "Se necesitan al menos dos coincidencias con un mismo rival."}</p></article>`;
+  document.querySelector("#miniLeagueEventsPagination").innerHTML = paginationMarkup(
+    "miniEvents", listPages.miniEvents, league.events.length, LIST_PAGE_SIZES.miniEvents, "carreras"
+  );
   refreshMetricHelp(document.querySelector("#mini-leagues"));
+  renderMiniLeagueContentTab();
+}
+
+function renderMiniLeagueContentTab() {
+  document.querySelectorAll("[data-mini-content-tab]").forEach((button) => {
+    const active = button.dataset.miniContentTab === activeMiniLeagueContentTab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.querySelectorAll("[data-mini-content-panel]").forEach((panel) => {
+    const active = panel.dataset.miniContentPanel === activeMiniLeagueContentTab;
+    panel.hidden = !active;
+    panel.classList.toggle("active", active);
+  });
 }
 
 function customChampionshipById(championshipId = activeCustomChampionshipId) {
@@ -2454,10 +2866,36 @@ function driverColorVariable(color) {
 function renderDrivers() {
   const minimum = requiredWeeks();
   const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const ownerId = String(appState.settings.ownerIracingId);
+  const rankedDrivers = rankDrivers("weekly");
+  const recurrentDrivers = rankedDrivers.filter((driver) =>
+    String(driver.id) === ownerId || Number(driver.meetingsWithOwner || 0) >= 2
+  );
+  const singleDrivers = rankedDrivers.filter((driver) =>
+    String(driver.id) !== ownerId && Number(driver.meetingsWithOwner || 0) === 1
+  );
+  document.querySelector("#recurrentDriverCount").textContent = `${recurrentDrivers.length} piloto${recurrentDrivers.length === 1 ? "" : "s"}`;
+  document.querySelector("#singleDriverCount").textContent = `${singleDrivers.length} piloto${singleDrivers.length === 1 ? "" : "s"}`;
+  document.querySelector("#allDriverCount").textContent = `${rankedDrivers.length} piloto${rankedDrivers.length === 1 ? "" : "s"}`;
+  document.querySelectorAll("[data-driver-filter]").forEach((button) => {
+    const active = button.dataset.driverFilter === activeDriverFilter;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  const filteredDrivers = activeDriverFilter === "single"
+    ? singleDrivers
+    : activeDriverFilter === "all" ? rankedDrivers : recurrentDrivers;
+  const totalPages = Math.max(1, Math.ceil(filteredDrivers.length / LIST_PAGE_SIZES.drivers));
+  listPages.drivers = Math.min(listPages.drivers, totalPages);
+  const visibleIds = new Set(filteredDrivers.slice(
+    (listPages.drivers - 1) * LIST_PAGE_SIZES.drivers,
+    listPages.drivers * LIST_PAGE_SIZES.drivers
+  ).map((driver) => String(driver.id)));
   let officialPosition = 0;
-  document.querySelector("#driverGrid").innerHTML = rankDrivers("weekly").map((driver) => {
+  const cards = rankedDrivers.map((driver) => {
     const eligible = driver.weeks >= minimum;
     if (eligible) officialPosition += 1;
+    if (!visibleIds.has(String(driver.id))) return "";
     const position = eligible ? `#${officialPosition}` : "PROVISIONAL";
     const isOwner = String(driver.id) === String(appState.settings.ownerIracingId);
     const participation = appState.league.weeksCompleted
@@ -2482,6 +2920,11 @@ function renderDrivers() {
         <div class="driver-card-link">Ver perfil completo <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></div>
       </article>`;
   }).join("");
+  document.querySelector("#driverGrid").innerHTML = cards || `
+    <article class="empty-archive driver-empty-state"><h3>${activeDriverFilter === "recurrent" ? "Todavía no hay rivales recurrentes" : "No hay pilotos en este grupo"}</h3><p>${activeDriverFilter === "recurrent" ? "Los pilotos pasarán aquí cuando hayas coincidido con ellos en dos carreras o más." : "Prueba con otro filtro para consultar el resto de la parrilla."}</p></article>`;
+  document.querySelector("#driverPagination").innerHTML = paginationMarkup(
+    "drivers", listPages.drivers, filteredDrivers.length, LIST_PAGE_SIZES.drivers, "pilotos"
+  );
 }
 
 function renderLeagueContext() {
@@ -2645,12 +3088,14 @@ function renderOwnerSeasonOverview() {
     stats.innerHTML = '<article><small>Carreras</small><strong>0</strong><span>sin resultados personales</span></article>';
     tracks.innerHTML = "";
     races.innerHTML = '<tr><td colspan="10">No hay carreras del piloto de referencia en esta temporada.</td></tr>';
+    document.querySelector("#ownerSeasonPagination").innerHTML = "";
     document.querySelector("#ownerProgressContent").innerHTML =
       '<p class="session-empty">No hay resultados personales para calcular la progresión.</p>';
     document.querySelector("#ownerLatestTitle").textContent = "Sin carreras personales";
     document.querySelector("#ownerLatestWeek").textContent = "—";
     document.querySelector("#ownerLatestContent").innerHTML =
       '<p class="session-empty">No existe un último resultado para el piloto de referencia.</p>';
+    renderEvolutionCharts();
     return;
   }
 
@@ -2703,7 +3148,13 @@ function renderOwnerSeasonOverview() {
           </button>`).join("")}
       </div>`
     : "";
-  races.innerHTML = ownerSeasonAnalysis.races.map((race) => `
+  const ownerRacePages = Math.max(1, Math.ceil(ownerSeasonAnalysis.races.length / LIST_PAGE_SIZES.ownerRaces));
+  listPages.ownerRaces = Math.min(listPages.ownerRaces, ownerRacePages);
+  const visibleOwnerSeasonRaces = ownerSeasonAnalysis.races.slice(
+    (listPages.ownerRaces - 1) * LIST_PAGE_SIZES.ownerRaces,
+    listPages.ownerRaces * LIST_PAGE_SIZES.ownerRaces
+  );
+  races.innerHTML = visibleOwnerSeasonRaces.map((race) => `
     <tr data-owner-season-race="${race.eventId}" tabindex="0" role="button">
       <td><strong>${escapeHtml(race.track)}</strong><small class="table-subline">${formatRaceDate(race.startTime)} · ${escapeHtml(race.layout || "Trazado principal")}</small></td>
       ${isAssetto || isRaceRoom ? "" : `<td class="numeric">${race.splitNumber || "—"}${race.splitTotal ? ` / ${race.splitTotal}` : ""}</td>
@@ -2717,6 +3168,9 @@ function renderOwnerSeasonOverview() {
       <td class="numeric">${gridScoreMarkup(race)}</td><td class="numeric">${cleanlinessMarkup(race)}</td>`}
       <td><button class="text-button" type="button" data-owner-season-race="${race.eventId}">Abrir</button></td>
     </tr>`).join("");
+  document.querySelector("#ownerSeasonPagination").innerHTML = paginationMarkup(
+    "ownerRaces", listPages.ownerRaces, ownerSeasonAnalysis.races.length, LIST_PAGE_SIZES.ownerRaces, "carreras"
+  );
 
   const chronologicalRaces = ownerSeasonAnalysis.races.slice().reverse();
   const topFiveRate = summary.races ? summary.topFive / summary.races * 100 : 0;
@@ -2753,6 +3207,7 @@ function renderOwnerSeasonOverview() {
     </div>
     <button class="text-button owner-latest-open" type="button" data-overview-owner-race="${latest.eventId}">Abrir resultado completo <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button>
   `;
+  renderEvolutionCharts();
 }
 
 function openOwnerTrackDetail(trackIndex) {
@@ -3060,6 +3515,7 @@ function renderSettings() {
   rankingButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.ranking === appState.settings.rankingMode);
   });
+  renderSettingsTab(activeSettingsTab);
 }
 
 function renderTelemetrySettings() {
@@ -3089,6 +3545,7 @@ function renderAll() {
   renderRounds();
   renderDrivers();
   renderSettings();
+  renderAllSectionTabs();
   refreshMetricHelp(document);
 }
 
@@ -3195,6 +3652,84 @@ document.querySelector("#menuButton").addEventListener("click", () => {
 });
 mobileOverlay.addEventListener("click", closeMobileMenu);
 
+document.addEventListener("click", (event) => {
+  const sectionTab = event.target.closest("[data-section-tab]");
+  if (sectionTab) {
+    const group = sectionTab.closest("[data-section-tabs]")?.dataset.sectionTabs;
+    if (group) selectSectionTab(group, sectionTab.dataset.sectionTab);
+    return;
+  }
+  const driverFilter = event.target.closest("[data-driver-filter]");
+  if (driverFilter) {
+    activeDriverFilter = driverFilter.dataset.driverFilter;
+    localStorage.setItem("gridscope-driver-filter", activeDriverFilter);
+    listPages.drivers = 1;
+    renderDrivers();
+    return;
+  }
+  const settingsTab = event.target.closest("[data-settings-tab]");
+  if (settingsTab) {
+    activeSettingsTab = settingsTab.dataset.settingsTab;
+    localStorage.setItem("gridscope-settings-tab", activeSettingsTab);
+    renderSettingsTab(activeSettingsTab);
+    return;
+  }
+  const chartWindow = event.target.closest("[data-chart-window]");
+  if (chartWindow) {
+    activeChartWindow = chartWindow.dataset.chartWindow;
+    localStorage.setItem("gridscope-chart-window", activeChartWindow);
+    renderEvolutionCharts();
+    return;
+  }
+  const comparisonChartWindow = event.target.closest("[data-comparison-chart-window]");
+  if (comparisonChartWindow) {
+    activeComparisonChartWindow = comparisonChartWindow.dataset.comparisonChartWindow;
+    localStorage.setItem("gridscope-comparison-chart-window", activeComparisonChartWindow);
+    renderComparisonCharts();
+    return;
+  }
+  const comparisonRival = event.target.closest("[data-comparison-rival-id]");
+  if (comparisonRival) {
+    openRivalDetail(comparisonRival.dataset.comparisonRivalId);
+    return;
+  }
+  const chartPoint = event.target.closest("[data-chart-race-id]");
+  if (chartPoint) {
+    openRaceDetail(Number(chartPoint.dataset.chartRaceId));
+    return;
+  }
+  const pageButton = event.target.closest("[data-list-page]");
+  if (!pageButton || pageButton.disabled) return;
+  const target = pageButton.dataset.listPage;
+  listPages[target] += pageButton.dataset.pageDirection === "next" ? 1 : -1;
+  listPages[target] = Math.max(1, listPages[target]);
+  if (target === "ownerRaces") renderOwnerSeasonOverview();
+  else if (target === "rounds") renderRounds();
+  else if (target === "races") renderRaceExplorer();
+  else if (target === "drivers") renderDrivers();
+  else if (target === "miniEvents") renderMiniLeagues();
+  else renderRivals();
+  document.querySelector(`[data-list-page="${target}"]`)?.closest(".content-tab-panel, .view")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+document.querySelector("#evolutionCharts").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const point = event.target.closest("[data-chart-race-id]");
+  if (point) {
+    event.preventDefault();
+    openRaceDetail(Number(point.dataset.chartRaceId));
+  }
+});
+
+document.querySelector("#comparisonCharts").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const point = event.target.closest("[data-chart-race-id]");
+  if (point) {
+    event.preventDefault();
+    openRaceDetail(Number(point.dataset.chartRaceId));
+  }
+});
+
 document.querySelector("#refreshButton").addEventListener("click", async () => {
   const button = document.querySelector("#refreshButton");
   setButtonBusy(button, true, "Actualizando…");
@@ -3281,6 +3816,8 @@ document.querySelector("#miniLeagueTabs").addEventListener("click", (event) => {
     Math.max(1, Number(localStorage.getItem("gridscope-mini-minimum-races")) || 2)
   );
   activeMiniLeagueScope = tab.dataset.miniScope;
+  miniLeaguePage = 1;
+  listPages.miniEvents = 1;
   renderMiniLeagues();
 });
 document.querySelector("#customChampionshipList").addEventListener("click", (event) => {
@@ -3288,7 +3825,17 @@ document.querySelector("#customChampionshipList").addEventListener("click", (eve
   if (!card) return;
   activeCustomChampionshipId = Number(card.dataset.customChampionship);
   activeMiniLeagueScope = `custom:${activeCustomChampionshipId}`;
+  miniLeaguePage = 1;
+  listPages.miniEvents = 1;
   renderMiniLeagues();
+});
+document.querySelector("#miniLeagueContentTabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-mini-content-tab]");
+  if (!tab) return;
+  activeMiniLeagueContentTab = tab.dataset.miniContentTab;
+  localStorage.setItem("gridscope-mini-content-tab", activeMiniLeagueContentTab);
+  renderMiniLeagueContentTab();
+  document.querySelector("#miniLeagueContentTabs").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 document.querySelector("#createChampionshipButton").addEventListener("click", () => {
   openChampionshipEditor();
@@ -3391,6 +3938,8 @@ document.querySelector("#deleteChampionshipButton").addEventListener("click", as
 });
 document.querySelector("#miniLeaguePeriodSelect").addEventListener("change", (event) => {
   activeMiniLeaguePeriods[activeMiniLeagueScope] = event.target.value;
+  miniLeaguePage = 1;
+  listPages.miniEvents = 1;
   renderMiniLeagues();
 });
 document.querySelector("#miniLeagueMinimumRaces").addEventListener("change", (event) => {
@@ -3402,6 +3951,7 @@ document.querySelector("#miniLeagueMinimumRaces").addEventListener("change", (ev
     "gridscope-mini-minimum-races",
     String(miniLeagueMinimumRaces)
   );
+  miniLeaguePage = 1;
   renderMiniLeagues();
 });
 document.querySelector(".mini-league-table thead").addEventListener("click", (event) => {
@@ -3416,7 +3966,19 @@ document.querySelector(".mini-league-table thead").addEventListener("click", (ev
       direction: ["position", "name", "averageIncidents"].includes(key) ? "asc" : "desc"
     };
   }
+  miniLeaguePage = 1;
   renderMiniLeagues();
+});
+document.querySelector("#miniLeaguePreviousPage").addEventListener("click", () => {
+  if (miniLeaguePage <= 1) return;
+  miniLeaguePage -= 1;
+  renderMiniLeagues();
+  document.querySelector("#miniLeagueContentTabs").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+document.querySelector("#miniLeagueNextPage").addEventListener("click", () => {
+  miniLeaguePage += 1;
+  renderMiniLeagues();
+  document.querySelector("#miniLeagueContentTabs").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 document.querySelector("#miniLeagueBody").addEventListener("click", (event) => {
   const row = event.target.closest("[data-mini-driver-id]");
@@ -3520,6 +4082,18 @@ document.querySelector("#rivalsBody").addEventListener("click", (event) => {
   if (row) openRivalDetail(row.dataset.rivalId);
 });
 document.querySelector("#rivalsBody").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const row = event.target.closest("[data-rival-id]");
+  if (row) {
+    event.preventDefault();
+    openRivalDetail(row.dataset.rivalId);
+  }
+});
+document.querySelector("#singleRivalsBody").addEventListener("click", (event) => {
+  const row = event.target.closest("[data-rival-id]");
+  if (row) openRivalDetail(row.dataset.rivalId);
+});
+document.querySelector("#singleRivalsBody").addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
   const row = event.target.closest("[data-rival-id]");
   if (row) {

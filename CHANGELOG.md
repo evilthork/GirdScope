@@ -2,6 +2,24 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.8.0] - 2026-10-11
+
+- La aplicación reorganiza sus páginas principales mediante pestañas para
+  reducir el desplazamiento y separar mejor resúmenes, clasificaciones,
+  carreras y configuraciones.
+- Las listas extensas incorporan paginación y distinguen entre rivales
+  recurrentes, pilotos de una sola coincidencia y el historial completo.
+- El Resumen añade una vista de evolución con gráficas interactivas de las
+  métricas oficiales disponibles y de GridScore, Limpieza, salida y llegada.
+- Comparativas incorpora gráficas de posiciones, incidentes, duelos directos
+  y ventaja media frente a rivales recurrentes.
+- Los filtros de las gráficas permiten consultar 5, 10, 20 o todas las
+  carreras; cada punto abre el resultado y cada rival su historial compartido.
+- Las métricas y explicaciones se adaptan a iRacing, Assetto Corsa y RaceRoom,
+  sin presentar valores propios como si fueran oficiales.
+- El diseño de las nuevas vistas se adapta a pantallas estrechas y conserva
+  las tablas detalladas para consultar los valores exactos.
+
 ## [0.7.9] - 2026-07-26
 
 - La interfaz vuelve a abrirse de forma visible después de instalar una
