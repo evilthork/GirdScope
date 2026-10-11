@@ -2,6 +2,15 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.8.2] - 2026-10-11
+
+- La configuración distingue claramente el Customer ID del piloto y el
+  Client ID utilizado por la conexión OAuth.
+- El Customer ID guardado se muestra de forma explícita para evitar que una
+  API todavía no conectada parezca una pérdida de la identidad del usuario.
+- Se aclara que OAuth es opcional y que su estado no afecta a las carreras
+  importadas, las estadísticas ni las comparativas existentes.
+
 ## [0.8.1] - 2026-10-11
 
 - El actualizador reinicia GridScope indicando explícitamente la dirección y

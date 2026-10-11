@@ -3489,22 +3489,28 @@ function renderSettings() {
   const oauthIcon = document.querySelector("#oauthIcon");
   const oauthDot = document.querySelector("#oauthStatusDot");
   const disconnectButton = document.querySelector("#disconnectButton");
+  const ownerCustomerId = String(appState.settings.ownerIracingId || "").trim();
+  document.querySelector("#oauthOwnerIdentity").textContent = ownerCustomerId
+    ? `Customer ID ${ownerCustomerId} · se utiliza para identificar tus resultados y comparativas.`
+    : "Todavía no se ha configurado el Customer ID del piloto de referencia.";
   oauthInput.value = oauth.clientId || "";
   oauthIcon.classList.toggle("connected", Boolean(oauth.connected));
   oauthIcon.classList.toggle("disconnected", !oauth.connected);
   oauthDot.classList.toggle("warning", !oauth.connected);
   disconnectButton.hidden = !oauth.connected;
-  document.querySelector("#connectButton").textContent = oauth.connected ? "Volver a conectar" : "Guardar y conectar";
+  document.querySelector("#connectButton").textContent = oauth.connected ? "Volver a conectar la API" : "Guardar y conectar la API";
   document.querySelector("#oauthStatusTitle").textContent = oauth.connected
     ? oauth.profileName || "Cuenta conectada"
     : oauth.configured
       ? "Cliente configurado"
-      : "No conectado";
+      : "API OAuth no conectada";
   document.querySelector("#oauthStatusDetail").textContent = oauth.connected
     ? `iRacing ID ${oauth.profileCustId || "validado"} · Tokens cifrados por Windows`
     : oauth.configured
       ? "Listo para iniciar sesión en la web oficial de iRacing."
-      : "Configura un cliente público de iRacing.";
+      : ownerCustomerId
+        ? `Tu Customer ID ${ownerCustomerId} sigue guardado. La API es una conexión independiente y opcional.`
+        : "La API es opcional y utiliza un Client ID distinto del Customer ID del piloto.";
 
   const minimum = requiredWeeks();
   document.querySelector("#qualificationNote").innerHTML = `

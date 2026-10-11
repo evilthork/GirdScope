@@ -657,15 +657,19 @@
             </section>
             <section class="panel settings-card" data-simulator-only="iracing" data-settings-group="sources">
               <div class="settings-icon disconnected" id="oauthIcon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7m2.3 5.9a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" /></svg></div>
-              <h3>Conexión con iRacing</h3>
+              <h3>API OAuth de iRacing <span class="optional-label">Opcional</span></h3>
+              <div class="connection-box saved-identity-box">
+                <span class="status-dot"></span>
+                <div><strong>Piloto de referencia conservado</strong><small id="oauthOwnerIdentity">Customer ID de iRacing guardado en GridScope.</small></div>
+              </div>
               <div class="connection-box">
                 <span class="status-dot warning" id="oauthStatusDot"></span>
-                <div><strong id="oauthStatusTitle">No conectado</strong><small id="oauthStatusDetail">Configura un cliente público de iRacing.</small></div>
+                <div><strong id="oauthStatusTitle">API OAuth no conectada</strong><small id="oauthStatusDetail">Esta conexión no afecta a tu Customer ID ni a las carreras importadas.</small></div>
               </div>
-              <label>Client ID público<input id="oauthClientId" type="text" autocomplete="off" placeholder="Client ID emitido por iRacing" /></label>
+              <label>OAuth Client ID público<input id="oauthClientId" type="text" autocomplete="off" placeholder="Client ID OAuth emitido por iRacing" /><small>No es tu Customer ID ni tu número de piloto.</small></label>
               <p class="oauth-redirect">Redirect registrado: <code>http://127.0.0.1:0/oauth/callback</code></p>
               <div class="oauth-actions">
-                <button class="primary-button" id="connectButton" type="button">Guardar y conectar</button>
+                <button class="primary-button" id="connectButton" type="button">Guardar y conectar la API</button>
                 <button class="secondary-button" id="disconnectButton" type="button" hidden>Desconectar</button>
               </div>
               <p class="oauth-notice">iRacing mantiene pausada la creación de nuevos Client ID de OAuth. Por eso esta versión utiliza resultados JSON; cuando vuelva a habilitarlos, GridScope añadirá la integración directa en una versión posterior. <a href="https://support.iracing.com/support/solutions/articles/31000177790-oauth-client-credentials" target="_blank" rel="noreferrer">Consultar estado oficial</a>.</p>
