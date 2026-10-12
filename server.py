@@ -41,7 +41,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.8.6"
+APP_VERSION = "0.8.7"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -9063,8 +9063,10 @@ def main() -> None:
     store = DataStore(arguments.db)
     server = build_server(arguments.host, arguments.port, store)
     application_url = f"http://{arguments.host}:{arguments.port}"
-    print(f"GridScope disponible en {application_url}")
-    print("Manten esta ventana abierta. Pulsa Ctrl+C para detener la aplicacion.")
+    print(f"GridScope {APP_VERSION}")
+    print(f"Servidor local activo: {application_url}")
+    print("Manten esta ventana abierta mientras utilizas GridScope.")
+    print("Pulsa Ctrl+C para cerrar la aplicacion.")
     packaged = bool(getattr(sys, "frozen", False))
     reuse_existing_browser = (
         packaged
@@ -9072,8 +9074,6 @@ def main() -> None:
         and not arguments.open_browser
         and consume_post_update_browser_suppression()
     )
-    if reuse_existing_browser:
-        print("Actualizacion detectada: se reutilizara la pestana que ya estaba abierta.")
     if (
         not arguments.no_open_browser
         and (arguments.open_browser or packaged)

@@ -2,6 +2,14 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.8.7] - 2026-10-12
+
+- La consola de GridScope muestra claramente la versión que se está ejecutando.
+- El mensaje inicial presenta de forma más limpia la dirección del servidor
+  local y cómo cerrar la aplicación.
+- Se elimina el aviso técnico sobre la reutilización de la pestaña después de
+  actualizar; ese proceso continúa realizándose silenciosamente.
+
 ## [0.8.6] - 2026-10-12
 
 - El selector de campeonatos incorpora búsqueda por serie o temporada y filtros
