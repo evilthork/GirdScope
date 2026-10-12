@@ -144,6 +144,17 @@
               <div><strong>Mis campeonatos</strong><small id="leagueMenuCount">0 temporadas</small></div>
               <span class="league-menu-live"><i></i> LOCAL</span>
             </div>
+            <div class="league-menu-tools">
+              <label class="compact-search" for="leagueMenuSearch">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+                <input id="leagueMenuSearch" type="search" placeholder="Buscar serie o temporada…" autocomplete="off" />
+              </label>
+              <div class="compact-filter-group" aria-label="Filtrar campeonatos">
+                <button class="active" type="button" data-league-menu-filter="all">Todas</button>
+                <button type="button" data-league-menu-filter="current">Actuales</button>
+                <button type="button" data-league-menu-filter="historical">Históricas</button>
+              </div>
+            </div>
             <div class="league-menu-list" id="leagueMenuList"></div>
           </div>
         </div>
@@ -406,12 +417,22 @@
             <button class="content-tab" type="button" data-section-tab="races"><span>Carreras</span><small id="racesTabCount">0 resultados</small></button>
           </nav>
           <div class="content-tab-panel active" data-section-panel="rounds:weeks">
+          <div class="season-scan-summary" id="roundSeasonSummary"></div>
           <div class="round-list" id="roundList"></div>
           <div class="table-pagination" id="roundPagination"></div>
           </div>
           <div class="content-tab-panel" data-section-panel="rounds:races" hidden>
           <div class="section-heading race-explorer-heading">
             <div><p class="eyebrow">Archivo de sesiones</p><h2>Carreras importadas</h2><p>Abre una carrera para consultar la parrilla completa y todas sus estadísticas.</p></div>
+          </div>
+          <div class="race-explorer-toolbar">
+            <label class="compact-search race-search" for="raceExplorerSearch">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+              <input id="raceExplorerSearch" type="search" placeholder="Buscar circuito, trazado o ganador…" autocomplete="off" />
+            </label>
+            <label class="compact-select"><span>Semana</span><select id="raceWeekFilter"><option value="all">Todas</option></select></label>
+            <label class="compact-select"><span>Orden</span><select id="raceOrderFilter"><option value="recent">Más recientes</option><option value="oldest">Más antiguas</option><option value="best">Mejor resultado</option></select></label>
+            <span class="race-filter-summary" id="raceFilterSummary">0 resultados</span>
           </div>
           <div class="race-explorer" id="raceExplorer">
             <article class="empty-archive"><h3>Cargando carreras…</h3></article>
@@ -430,6 +451,13 @@
             <button class="content-tab" type="button" data-driver-filter="single"><span>Una coincidencia</span><small id="singleDriverCount">0 pilotos</small></button>
             <button class="content-tab" type="button" data-driver-filter="all"><span>Todos</span><small id="allDriverCount">0 pilotos</small></button>
           </nav>
+          <div class="driver-search-toolbar">
+            <label class="compact-search" for="driverSearch">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m16.5 16.5 4 4" /></svg>
+              <input id="driverSearch" type="search" placeholder="Buscar piloto por nombre o ID…" autocomplete="off" />
+            </label>
+            <span id="driverSearchSummary">Mostrando todos los pilotos</span>
+          </div>
           <div class="driver-grid" id="driverGrid"></div>
           <div class="table-pagination" id="driverPagination"></div>
         </section>

@@ -120,6 +120,20 @@ const activeActivities = new Map();
 let updatePreferences = { automatic: true, channel: "beta" };
 let currentUpdateStatus = null;
 let installedAppVersion = "";
+let leagueMenuSearch = "";
+let leagueMenuFilter = "all";
+let raceExplorerSearch = "";
+let raceWeekFilter = "all";
+let raceOrderFilter = "recent";
+let driverSearch = "";
+
+function normalizeSearchTerm(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .trim();
+}
 
 function paginationMarkup(target, page, totalItems, pageSize, noun) {
   if (!totalItems) return `<span>0 ${noun}</span>`;
@@ -1221,6 +1235,15 @@ function renderRanking(mode = appState.settings.rankingMode || "weekly") {
 function renderRounds() {
   const roundList = document.querySelector("#roundList");
   const rounds = appState.rounds.slice().reverse();
+  const totalRaces = rounds.reduce((total, round) => total + Number(round.races || 0), 0);
+  const distinctTracks = new Set(rounds.map((round) => normalizeSearchTerm(round.track))).size;
+  const averages = rounds.map((round) => Number(round.average)).filter((value) => Number.isFinite(value) && value > 0);
+  const bestAverage = averages.length ? Math.min(...averages) : null;
+  document.querySelector("#roundSeasonSummary").innerHTML = `
+    <article><small>Semanas registradas</small><strong>${rounds.length}</strong><span>de ${appState.league.totalWeeks || rounds.length} previstas</span></article>
+    <article><small>Carreras importadas</small><strong>${totalRaces}</strong><span>resultados de esta temporada</span></article>
+    <article><small>Circuitos visitados</small><strong>${distinctTracks}</strong><span>${distinctTracks === 1 ? "una configuración" : "configuraciones distintas"}</span></article>
+    <article><small>Mejor media semanal</small><strong>${bestAverage == null ? "—" : `P${formatDecimal(bestAverage)}`}</strong><span>resultado medio de una jornada</span></article>`;
   const totalPages = Math.max(1, Math.ceil(rounds.length / LIST_PAGE_SIZES.rounds));
   listPages.rounds = Math.min(listPages.rounds, totalPages);
   const visibleRounds = rounds.slice(
@@ -1230,14 +1253,22 @@ function renderRounds() {
   document.querySelector("#roundsTabCount").textContent = `${rounds.length} semana${rounds.length === 1 ? "" : "s"}`;
   roundList.innerHTML = visibleRounds.map((round) => `
     <article class="round-card" data-session-week="${round.week}" tabindex="0" role="button" aria-label="Abrir detalle de la semana ${round.week}">
-      <div class="round-week">S${String(round.week).padStart(2, "0")}</div>
-      <img class="track-thumbnail" src="${trackImageUrl(round.track, round.layout)}" alt="" loading="lazy">
-      <div class="round-track"><strong>${round.track}</strong><small>${round.layout}</small></div>
-      <div class="round-stat"><small>Carreras</small><strong>${round.races}</strong></div>
-      <div class="round-stat"><small>Pos. media</small><strong>${formatDecimal(round.average)}</strong></div>
-      <div class="round-stat"><small>Incidentes</small><strong>${Number(round.incidents).toFixed(1).replace(".", ",")}x</strong></div>
-      <div class="round-stat"><small>SoF destacado</small><strong>${formatInteger(round.sof)}</strong></div>
-      <button class="icon-button" type="button" aria-label="Ver jornada ${round.week}"><svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button>
+      <div class="round-card-visual">
+        <img class="track-thumbnail" src="${trackImageUrl(round.track, round.layout)}" alt="" loading="lazy">
+        <span class="round-week"><small>SEMANA</small>${String(round.week).padStart(2, "0")}</span>
+      </div>
+      <div class="round-card-body">
+        <div class="round-card-heading">
+          <div class="round-track"><strong>${escapeHtml(round.track)}</strong><small>${escapeHtml(round.layout || "Trazado principal")}</small></div>
+          <button class="icon-button" type="button" aria-label="Ver jornada ${round.week}"><svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button>
+        </div>
+        <div class="round-card-stats">
+          <div class="round-stat"><small>Carreras</small><strong>${round.races}</strong></div>
+          <div class="round-stat"><small>Pos. media</small><strong>P${formatDecimal(round.average)}</strong></div>
+          <div class="round-stat"><small>Incidentes</small><strong>${Number(round.incidents).toFixed(1).replace(".", ",")}x</strong></div>
+          <div class="round-stat"><small>SoF máximo</small><strong>${formatInteger(round.sof)}</strong></div>
+        </div>
+      </div>
     </article>
   `).join("");
   document.querySelector("#roundPagination").innerHTML = paginationMarkup(
@@ -1398,39 +1429,88 @@ function renderRaceExplorer() {
         <p>Importa archivos eventresult para crear el historial detallado.</p>
       </article>`;
     document.querySelector("#raceExplorerPagination").innerHTML = "";
+    document.querySelector("#raceFilterSummary").textContent = "0 resultados";
     return;
   }
-  const totalPages = Math.max(1, Math.ceil(raceAnalysis.races.length / LIST_PAGE_SIZES.races));
+  const weeks = Array.from(new Set(raceAnalysis.races.map((race) => String(race.week)))).sort((a, b) => Number(b) - Number(a));
+  const weekSelect = document.querySelector("#raceWeekFilter");
+  weekSelect.innerHTML = `<option value="all">Todas</option>${weeks.map((week) => `<option value="${escapeHtml(week)}">Semana ${String(week).padStart(2, "0")}</option>`).join("")}`;
+  if (!weeks.includes(String(raceWeekFilter))) raceWeekFilter = "all";
+  weekSelect.value = raceWeekFilter;
+
+  const search = normalizeSearchTerm(raceExplorerSearch);
+  const filteredRaces = raceAnalysis.races
+    .filter((race) => raceWeekFilter === "all" || String(race.week) === raceWeekFilter)
+    .filter((race) => !search || normalizeSearchTerm([
+      race.track,
+      race.layout,
+      race.winnerName,
+      `semana ${race.week}`,
+      formatRaceDate(race.startTime)
+    ].join(" ")).includes(search))
+    .sort((raceA, raceB) => {
+      if (raceOrderFilter === "oldest") return String(raceA.startTime).localeCompare(String(raceB.startTime));
+      if (raceOrderFilter === "best") {
+        const resultA = Number(raceA.ownerResult?.finishPosition ?? Number.MAX_SAFE_INTEGER);
+        const resultB = Number(raceB.ownerResult?.finishPosition ?? Number.MAX_SAFE_INTEGER);
+        return resultA - resultB || String(raceB.startTime).localeCompare(String(raceA.startTime));
+      }
+      return String(raceB.startTime).localeCompare(String(raceA.startTime));
+    });
+  document.querySelector("#raceFilterSummary").textContent = `${filteredRaces.length} de ${raceAnalysis.races.length} resultados`;
+  if (!filteredRaces.length) {
+    container.innerHTML = '<article class="empty-archive"><h3>No hay coincidencias</h3><p>Prueba con otro circuito, semana o término de búsqueda.</p></article>';
+    document.querySelector("#raceExplorerPagination").innerHTML = "";
+    return;
+  }
+  const totalPages = Math.max(1, Math.ceil(filteredRaces.length / LIST_PAGE_SIZES.races));
   listPages.races = Math.min(listPages.races, totalPages);
-  const visibleRaces = raceAnalysis.races.slice(
+  const visibleRaces = filteredRaces.slice(
     (listPages.races - 1) * LIST_PAGE_SIZES.races,
     listPages.races * LIST_PAGE_SIZES.races
   );
-  container.innerHTML = visibleRaces.map((race) => {
-    const owner = race.ownerResult;
-    const split = race.splitNumber
-      ? `Split ${race.splitNumber}${race.splitTotal ? ` / ${race.splitTotal}` : ""}`
-      : "Split no indicado";
+  const racesByWeek = new Map();
+  visibleRaces.forEach((race) => {
+    const key = String(race.week);
+    if (!racesByWeek.has(key)) racesByWeek.set(key, []);
+    racesByWeek.get(key).push(race);
+  });
+  container.innerHTML = Array.from(racesByWeek.entries()).map(([week, races]) => {
+    const representative = races[0];
+    const ownerResults = races.map((race) => race.ownerResult?.finishPosition).filter((value) => value != null);
+    const best = ownerResults.length ? Math.min(...ownerResults) : null;
     return `
-      <button class="race-card" type="button" data-race-id="${race.id}">
-        <div class="race-card-week"><small>SEM.</small><strong>${String(race.week).padStart(2, "0")}</strong></div>
-        <img class="track-thumbnail race-track-thumbnail" src="${trackImageUrl(race.track, race.layout)}" alt="" loading="lazy">
-        <div class="race-card-main">
-          <strong>${escapeHtml(race.track)}</strong>
-          <span>${escapeHtml(race.layout || "Trazado principal")} · ${formatRaceDate(race.startTime)}</span>
-          <small>${split} · SoF ${formatInteger(race.strengthOfField)} · ${race.fieldSize} pilotos</small>
+      <section class="race-week-group">
+        <header class="race-week-header">
+          <span class="race-week-number"><small>SEMANA</small><strong>${String(week).padStart(2, "0")}</strong></span>
+          <img src="${trackImageUrl(representative.track, representative.layout)}" alt="" loading="lazy">
+          <div><strong>${escapeHtml(representative.track)}</strong><small>${escapeHtml(representative.layout || "Trazado principal")} · ${races.length} carrera${races.length === 1 ? "" : "s"} en esta página</small></div>
+          <span class="race-week-best"><small>Mejor resultado</small><strong>${best == null ? "—" : `P${best}`}</strong></span>
+        </header>
+        <div class="race-week-grid">
+          ${races.map((race) => {
+            const owner = race.ownerResult;
+            const split = race.splitNumber ? `Split ${race.splitNumber}${race.splitTotal ? ` / ${race.splitTotal}` : ""}` : "Split no indicado";
+            return `
+              <button class="race-card compact" type="button" data-race-id="${race.id}">
+                <div class="race-card-main">
+                  <strong>${formatRaceDate(race.startTime)}</strong>
+                  <span>${split} · SoF ${formatInteger(race.strengthOfField)}</span>
+                  <small>${race.fieldSize} pilotos · Ganó ${escapeHtml(race.winnerName || "—")}</small>
+                </div>
+                <div class="race-card-result">
+                  <small>Tu resultado</small>
+                  <strong>${owner ? `P${owner.finishPosition}` : "—"}</strong>
+                  <span>${owner ? `${positionChangeMarkup(owner.positionChange)} · ${owner.incidents}x` : "No participaste"}</span>
+                </div>
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
+              </button>`;
+          }).join("")}
         </div>
-        <div class="race-card-result">
-          <small>Tu resultado</small>
-          <strong>${owner ? `P${owner.finishPosition}` : "—"}</strong>
-          <span>${owner ? `${positionChangeMarkup(owner.positionChange)} · ${owner.incidents}x` : "No participaste"}</span>
-        </div>
-        <div class="race-card-winner"><small>Ganador</small><strong>${escapeHtml(race.winnerName || "—")}</strong></div>
-        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
-      </button>`;
+      </section>`;
   }).join("");
   document.querySelector("#raceExplorerPagination").innerHTML = paginationMarkup(
-    "races", listPages.races, raceAnalysis.races.length, LIST_PAGE_SIZES.races, "carreras"
+    "races", listPages.races, filteredRaces.length, LIST_PAGE_SIZES.races, "carreras"
   );
 }
 
@@ -2905,9 +2985,18 @@ function renderDrivers() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
   });
-  const filteredDrivers = activeDriverFilter === "single"
+  const groupedDrivers = activeDriverFilter === "single"
     ? singleDrivers
     : activeDriverFilter === "all" ? rankedDrivers : recurrentDrivers;
+  const search = normalizeSearchTerm(driverSearch);
+  const filteredDrivers = groupedDrivers.filter((driver) => !search || normalizeSearchTerm([
+    driver.name,
+    driver.id,
+    driverIdentityText(driver.id)
+  ].join(" ")).includes(search));
+  document.querySelector("#driverSearchSummary").textContent = search
+    ? `${filteredDrivers.length} de ${groupedDrivers.length} piloto${groupedDrivers.length === 1 ? "" : "s"}`
+    : `${groupedDrivers.length} piloto${groupedDrivers.length === 1 ? "" : "s"} en este grupo`;
   const totalPages = Math.max(1, Math.ceil(filteredDrivers.length / LIST_PAGE_SIZES.drivers));
   listPages.drivers = Math.min(listPages.drivers, totalPages);
   const visibleIds = new Set(filteredDrivers.slice(
@@ -2944,25 +3033,14 @@ function renderDrivers() {
       </article>`;
   }).join("");
   document.querySelector("#driverGrid").innerHTML = cards || `
-    <article class="empty-archive driver-empty-state"><h3>${activeDriverFilter === "recurrent" ? "Todavía no hay rivales recurrentes" : "No hay pilotos en este grupo"}</h3><p>${activeDriverFilter === "recurrent" ? "Los pilotos pasarán aquí cuando hayas coincidido con ellos en dos carreras o más." : "Prueba con otro filtro para consultar el resto de la parrilla."}</p></article>`;
+    <article class="empty-archive driver-empty-state"><h3>${search ? "No encontramos ese piloto" : activeDriverFilter === "recurrent" ? "Todavía no hay rivales recurrentes" : "No hay pilotos en este grupo"}</h3><p>${search ? "Prueba con otro nombre, apellido o ID." : activeDriverFilter === "recurrent" ? "Los pilotos pasarán aquí cuando hayas coincidido con ellos en dos carreras o más." : "Prueba con otro filtro para consultar el resto de la parrilla."}</p></article>`;
   document.querySelector("#driverPagination").innerHTML = paginationMarkup(
     "drivers", listPages.drivers, filteredDrivers.length, LIST_PAGE_SIZES.drivers, "pilotos"
   );
 }
 
-function renderLeagueContext() {
-  const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+function renderLeagueMenu() {
   const leagues = appState.leagues?.length ? appState.leagues : [appState.league];
-  const theme = seriesTheme(appState.league.seriesName);
-  document.documentElement.style.setProperty("--series-accent", theme.hex);
-  document.documentElement.style.setProperty("--series-accent-rgb", theme.rgb);
-  document.querySelector(".league-dot").textContent = seriesInitials(appState.league.seriesName);
-  document.querySelector("#sidebarSeriesName").textContent = appState.league.seriesName;
-  document.querySelector("#sidebarSeasonName").textContent =
-    `${shortSeason(appState.league.season)} · ${appState.league.isCurrent ? "Actual" : "Histórica"}`;
-  document.querySelector("#topbarSeriesName").textContent = appState.league.seriesName;
-  document.querySelector("#topbarSeasonName").textContent =
-    `${shortSeason(appState.league.season)} · ${appState.league.isCurrent ? "Temporada actual" : "Histórica"}`;
   const leaguesBySeries = new Map();
   leagues.forEach((league) => {
     if (!leaguesBySeries.has(league.seriesName)) {
@@ -2972,14 +3050,25 @@ function renderLeagueContext() {
   });
   document.querySelector("#leagueMenuCount").textContent =
     `${leaguesBySeries.size} serie${leaguesBySeries.size === 1 ? "" : "s"} · ${leagues.length} temporada${leagues.length === 1 ? "" : "s"}`;
-  document.querySelector("#leagueMenuList").innerHTML = Array.from(leaguesBySeries.entries())
+  const search = normalizeSearchTerm(leagueMenuSearch);
+  const visibleSeries = Array.from(leaguesBySeries.entries()).filter(([seriesName, seriesLeagues]) => {
+    const matchesStatus = leagueMenuFilter === "all"
+      || (leagueMenuFilter === "current" && seriesLeagues.some((league) => league.isCurrent))
+      || (leagueMenuFilter === "historical" && seriesLeagues.some((league) => !league.isCurrent));
+    const haystack = normalizeSearchTerm(`${seriesName} ${seriesLeagues.map((league) => `${league.season} ${league.car || ""}`).join(" ")}`);
+    return matchesStatus && (!search || haystack.includes(search));
+  });
+  document.querySelectorAll("[data-league-menu-filter]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.leagueMenuFilter === leagueMenuFilter);
+  });
+  document.querySelector("#leagueMenuList").innerHTML = visibleSeries.length ? visibleSeries
     .map(([seriesName, seriesLeagues]) => {
       const itemTheme = seriesTheme(seriesName);
       const containsSelected = seriesLeagues.some((league) => league.id === appState.league.id);
       const containsCurrent = seriesLeagues.some((league) => league.isCurrent);
       const totalRaces = seriesLeagues.reduce((total, league) => total + (league.raceCount || 0), 0);
       return `
-        <details class="league-series-group ${containsSelected ? "selected" : ""}" data-context-key="${escapeHtml(`league:${seriesName}`)}" style="--item-accent:${itemTheme.hex}" ${containsSelected ? "open" : ""}>
+        <details class="league-series-group ${containsSelected ? "selected" : ""}" data-context-key="${escapeHtml(`league:${seriesName}`)}" style="--item-accent:${itemTheme.hex}" ${(containsSelected || search) ? "open" : ""}>
           <summary class="league-series-summary">
             <span class="league-menu-icon">${seriesInitials(seriesName)}</span>
             <span class="league-menu-copy">
@@ -3006,7 +3095,26 @@ function renderLeagueContext() {
               </button>`).join("")}
           </div>
         </details>`;
-    }).join("");
+    }).join("") : `
+      <div class="league-menu-empty">
+        <strong>No hay coincidencias</strong>
+        <small>Prueba con otro nombre o cambia el filtro.</small>
+      </div>`;
+}
+
+function renderLeagueContext() {
+  const isAssetto = (appState.settings.platform || appState.league.platform) === "assetto-corsa";
+  const theme = seriesTheme(appState.league.seriesName);
+  document.documentElement.style.setProperty("--series-accent", theme.hex);
+  document.documentElement.style.setProperty("--series-accent-rgb", theme.rgb);
+  document.querySelector(".league-dot").textContent = seriesInitials(appState.league.seriesName);
+  document.querySelector("#sidebarSeriesName").textContent = appState.league.seriesName;
+  document.querySelector("#sidebarSeasonName").textContent =
+    `${shortSeason(appState.league.season)} · ${appState.league.isCurrent ? "Actual" : "Histórica"}`;
+  document.querySelector("#topbarSeriesName").textContent = appState.league.seriesName;
+  document.querySelector("#topbarSeasonName").textContent =
+    `${shortSeason(appState.league.season)} · ${appState.league.isCurrent ? "Temporada actual" : "Histórica"}`;
+  renderLeagueMenu();
   document.title = `GridScope — ${appState.league.seriesName}`;
   const seasonBadge = document.querySelector("#seasonStatusBadge");
   seasonBadge.classList.toggle("historical", !appState.league.isCurrent);
@@ -4036,6 +4144,11 @@ document.querySelector("#driverGrid").addEventListener("click", (event) => {
   const card = event.target.closest("[data-driver-profile-id]");
   if (card) openSeasonDriverDetail(card.dataset.driverProfileId);
 });
+document.querySelector("#driverSearch").addEventListener("input", (event) => {
+  driverSearch = event.target.value;
+  listPages.drivers = 1;
+  renderDrivers();
+});
 document.querySelector("#driverGrid").addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
   const card = event.target.closest("[data-driver-profile-id]");
@@ -4161,6 +4274,16 @@ document.querySelector("#leagueMenuButton").addEventListener("click", () => {
   const expanded = document.querySelector("#leagueMenuButton").getAttribute("aria-expanded") === "true";
   setLeagueMenuOpen(!expanded);
 });
+document.querySelector("#leagueMenuSearch").addEventListener("input", (event) => {
+  leagueMenuSearch = event.target.value;
+  renderLeagueMenu();
+});
+document.querySelector(".league-menu-tools").addEventListener("click", (event) => {
+  const filter = event.target.closest("[data-league-menu-filter]");
+  if (!filter) return;
+  leagueMenuFilter = filter.dataset.leagueMenuFilter;
+  renderLeagueMenu();
+});
 document.querySelector("#leagueMenuList").addEventListener("click", async (event) => {
   const item = event.target.closest("[data-menu-league]");
   if (!item) return;
@@ -4173,6 +4296,21 @@ document.querySelector("#leagueMenuList").addEventListener("click", async (event
   } catch (error) {
     showToast("No se ha podido cambiar de serie", error.message);
   }
+});
+document.querySelector("#raceExplorerSearch").addEventListener("input", (event) => {
+  raceExplorerSearch = event.target.value;
+  listPages.races = 1;
+  renderRaceExplorer();
+});
+document.querySelector("#raceWeekFilter").addEventListener("change", (event) => {
+  raceWeekFilter = event.target.value;
+  listPages.races = 1;
+  renderRaceExplorer();
+});
+document.querySelector("#raceOrderFilter").addEventListener("change", (event) => {
+  raceOrderFilter = event.target.value;
+  listPages.races = 1;
+  renderRaceExplorer();
 });
 document.querySelector("#topbarSeasonContext").addEventListener("click", () => {
   if (window.innerWidth <= 900) {

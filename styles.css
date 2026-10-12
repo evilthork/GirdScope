@@ -157,7 +157,21 @@ svg {
 .league-menu-head small { margin-top: 3px; color: var(--muted); font-size: 7px; }
 .league-menu-live { display: inline-flex; align-items: center; gap: 5px; color: var(--green); font-size: 6px; font-weight: 800; letter-spacing: .12em; }
 .league-menu-live i { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(77,204,134,.08); }
-.league-menu-list { max-height: min(520px, calc(100vh - 230px)); overflow-y: auto; padding: 7px; }
+.league-menu-tools { display: grid; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.012); }
+.compact-search { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; background: #111316; transition: border-color .15s ease, box-shadow .15s ease; }
+.compact-search:focus-within { border-color: rgba(var(--series-accent-rgb), .55); box-shadow: 0 0 0 3px rgba(var(--series-accent-rgb), .08); }
+.compact-search svg { width: 14px; height: 14px; flex: 0 0 auto; fill: none; stroke: var(--muted); stroke-width: 1.8; }
+.compact-search input { min-width: 0; width: 100%; height: 36px; padding: 0; color: var(--text); border: 0; outline: 0; background: transparent; font: inherit; font-size: 9px; }
+.compact-search input::placeholder { color: var(--subtle); }
+.compact-filter-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.compact-filter-group button { padding: 7px 6px; color: var(--muted); border: 1px solid transparent; border-radius: 7px; background: rgba(255,255,255,.025); font-size: 7px; font-weight: 700; cursor: pointer; }
+.compact-filter-group button:hover { color: var(--text); background: rgba(255,255,255,.045); }
+.compact-filter-group button.active { color: var(--series-accent); border-color: rgba(var(--series-accent-rgb), .25); background: rgba(var(--series-accent-rgb), .09); }
+.league-menu-list { max-height: min(480px, calc(100vh - 320px)); overflow-y: auto; padding: 7px; }
+.league-menu-empty { padding: 26px 14px; text-align: center; }
+.league-menu-empty strong, .league-menu-empty small { display: block; }
+.league-menu-empty strong { font-size: 10px; }
+.league-menu-empty small { margin-top: 5px; color: var(--subtle); font-size: 8px; }
 .league-menu-group { padding: 7px 7px 4px; color: var(--subtle); font-size: 6px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .league-menu-item {
   width: 100%;
@@ -735,13 +749,18 @@ tbody tr:last-child td { border-bottom: 0; }
 .section-heading h2 { margin: 0; font: 800 27px/1.1 "Manrope", sans-serif; letter-spacing: -.03em; }
 .section-heading p:last-child { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
 .section-actions { display: flex; gap: 8px; }
-.round-list { display: grid; gap: 10px; }
+.season-scan-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 12px; }
+.season-scan-summary article { padding: 13px 14px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255,255,255,.018); }
+.season-scan-summary small, .season-scan-summary strong, .season-scan-summary span { display: block; }
+.season-scan-summary small { color: var(--subtle); font-size: 7px; text-transform: uppercase; letter-spacing: .06em; }
+.season-scan-summary strong { margin-top: 5px; color: var(--series-accent); font: 800 18px/1 "Manrope", sans-serif; }
+.season-scan-summary span { margin-top: 5px; color: var(--muted); font-size: 7px; }
+.round-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
 .round-card {
+  min-width: 0;
   display: grid;
-  grid-template-columns: 64px 112px minmax(180px, 1.3fr) repeat(4, minmax(90px, .6fr)) 28px;
-  align-items: center;
-  gap: 14px;
-  padding: 15px 18px;
+  grid-template-columns: 134px minmax(0, 1fr);
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
@@ -754,19 +773,46 @@ tbody tr:last-child td { border-bottom: 0; }
 .round-card::after { content: ""; position: absolute; width: 180px; height: 180px; right: -80px; top: -90px; border-radius: 50%; background: rgba(var(--series-accent-rgb), .04); pointer-events: none; }
 .round-card:hover { border-color: rgba(var(--series-accent-rgb), .28); transform: translateY(-1px); }
 .round-card:focus-visible { outline: 2px solid var(--series-accent); outline-offset: 2px; }
-.round-week { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 12px; background: rgba(var(--series-accent-rgb), .1); color: var(--series-accent); font: 800 12px/1 "Manrope", sans-serif; }
+.round-card-visual { position: relative; min-height: 134px; overflow: hidden; background: #0d0f12; }
+.round-card-visual::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 25%, rgba(8,10,12,.82)); }
+.round-card-visual .track-thumbnail { width: 100%; height: 100%; position: absolute; inset: 0; border: 0; border-radius: 0; opacity: .72; }
+.round-week { position: absolute; z-index: 1; left: 12px; bottom: 11px; display: grid; gap: 3px; color: #fff; font: 800 20px/1 "Manrope", sans-serif; }
+.round-week small { color: var(--series-accent); font-size: 6px; letter-spacing: .14em; }
 .track-thumbnail { width: 112px; height: 64px; display: block; object-fit: cover; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: #101216; }
+.round-card-body { min-width: 0; display: grid; align-content: space-between; gap: 14px; padding: 15px; }
+.round-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .round-track strong, .round-track small { display: block; }
 .round-track strong { font: 700 13px/1.2 "Manrope", sans-serif; }
 .round-track small { margin-top: 4px; color: var(--muted); font-size: 9px; }
-.round-stat { padding: 9px 10px; border: 1px solid rgba(255,255,255,.045); border-radius: 9px; background: rgba(255,255,255,.018); }
+.round-card-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.round-stat { min-width: 0; padding: 8px; border: 1px solid rgba(255,255,255,.045); border-radius: 8px; background: rgba(255,255,255,.018); }
 .round-stat small, .round-stat strong { display: block; }
-.round-stat small { color: var(--subtle); font-size: 8px; text-transform: uppercase; }
-.round-stat strong { margin-top: 4px; font-size: 11px; }
+.round-stat small { overflow: hidden; color: var(--subtle); font-size: 6px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.round-stat strong { margin-top: 4px; font-size: 10px; }
 .round-card .icon-button { width: 28px; height: 28px; background: transparent; }
 
 .race-explorer-heading { margin-top: 42px; }
+.race-explorer-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) 150px 160px auto; align-items: end; gap: 9px; margin-bottom: 12px; padding: 11px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.race-search { align-self: end; }
+.compact-select { display: grid; gap: 5px; }
+.compact-select > span { color: var(--subtle); font-size: 6px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.compact-select select { height: 38px; padding: 0 10px; color: var(--text); border: 1px solid var(--border); border-radius: 9px; outline: 0; background: #111316; font-size: 8px; }
+.compact-select select:focus { border-color: rgba(var(--series-accent-rgb), .55); }
+.race-filter-summary { align-self: center; color: var(--muted); font-size: 8px; text-align: right; white-space: nowrap; }
 .race-explorer { display: grid; gap: 10px; }
+.race-week-group { overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.012); }
+.race-week-header { display: grid; grid-template-columns: 58px 82px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 12px 14px; border-bottom: 1px solid var(--border); background: rgba(var(--series-accent-rgb), .035); }
+.race-week-header > img { width: 82px; height: 48px; object-fit: cover; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; }
+.race-week-header > div strong, .race-week-header > div small, .race-week-best small, .race-week-best strong { display: block; }
+.race-week-header > div strong { font: 700 12px/1.2 "Manrope", sans-serif; }
+.race-week-header > div small { margin-top: 4px; color: var(--muted); font-size: 8px; }
+.race-week-number { display: grid; place-items: center; align-content: center; height: 48px; color: var(--series-accent); border-radius: 9px; background: rgba(var(--series-accent-rgb), .1); }
+.race-week-number small { font-size: 5px; letter-spacing: .1em; }
+.race-week-number strong { margin-top: 3px; font: 800 15px/1 "Manrope", sans-serif; }
+.race-week-best { padding-left: 15px; text-align: right; border-left: 1px solid var(--border); }
+.race-week-best small { color: var(--subtle); font-size: 6px; text-transform: uppercase; }
+.race-week-best strong { margin-top: 4px; color: var(--series-accent); font: 800 15px/1 "Manrope", sans-serif; }
+.race-week-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 9px; }
 .race-card {
   width: 100%;
   display: grid;
@@ -803,6 +849,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .race-card-result strong { margin-top: 3px; color: var(--series-accent); font: 800 18px/1 "Manrope", sans-serif; }
 .race-card-result > span { margin-top: 5px; color: var(--muted); font-size: 8px; }
 .race-card-winner strong { margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.race-card.compact { grid-template-columns: minmax(0, 1fr) 112px 18px; gap: 12px; padding: 12px 13px; border-radius: 10px; box-shadow: none; }
+.race-card.compact .race-card-result { padding-left: 12px; }
+.race-card.compact .race-card-main strong { font-size: 10px; }
+.race-card.compact .race-card-main span { font-size: 8px; }
+.race-card.compact .race-card-main small { font-size: 7px; }
 .result-change { color: var(--muted); font-weight: 800; }
 .result-change.gained { color: var(--green); }
 .result-change.lost { color: #ec6d6d; }
@@ -1089,6 +1140,9 @@ tbody tr:last-child td { border-bottom: 0; }
 .app-tooltip[hidden] { display: none; }
 
 .driver-grid { display: grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap: 14px; }
+.driver-search-toolbar { display: flex; align-items: center; gap: 12px; margin: -3px 0 15px; }
+.driver-search-toolbar .compact-search { flex: 1 1 420px; max-width: 620px; }
+.driver-search-toolbar > span { margin-left: auto; color: var(--muted); font-size: 8px; white-space: nowrap; }
 .driver-card {
   position: relative;
   overflow: hidden;
@@ -2013,6 +2067,8 @@ dialog .telemetry-file-list article { padding: 10px; }
   .evolution-chart-card:last-child { grid-column: auto; }
   .evolution-support { grid-template-columns: 1fr; }
   .comparison-charts-grid { grid-template-columns: 1fr; }
+  .race-explorer-toolbar { grid-template-columns: minmax(220px, 1fr) 140px 150px; }
+  .race-filter-summary { grid-column: 1 / -1; text-align: left; }
 }
 
 @media (max-width: 700px) {
@@ -2063,9 +2119,20 @@ dialog .telemetry-file-list article { padding: 10px; }
   .section-heading { align-items: flex-start; flex-direction: column; }
   .section-actions { width: 100%; }
   .section-actions button { flex: 1; }
-  .round-card { grid-template-columns: 50px 1fr 28px; }
-  .round-card .track-thumbnail { display: none; }
-  .round-stat { display: none; }
+  .season-scan-summary { grid-template-columns: repeat(2, 1fr); }
+  .round-list { grid-template-columns: 1fr; }
+  .round-card { grid-template-columns: 105px minmax(0, 1fr); }
+  .round-card-visual { min-height: 128px; }
+  .round-card .track-thumbnail { display: block; }
+  .round-stat { display: block; }
+  .race-explorer-toolbar { grid-template-columns: 1fr 1fr; }
+  .race-search, .race-filter-summary { grid-column: 1 / -1; }
+  .race-week-grid { grid-template-columns: 1fr; }
+  .race-week-header { grid-template-columns: 52px minmax(0, 1fr) auto; }
+  .race-week-header > img { display: none; }
+  .driver-search-toolbar { align-items: stretch; flex-direction: column; }
+  .driver-search-toolbar .compact-search { flex-basis: auto; max-width: none; }
+  .driver-search-toolbar > span { margin-left: 0; }
   .driver-grid, .settings-grid, .history-layout { grid-template-columns: 1fr; }
   .archive-card { align-items: flex-start; }
   .import-options { grid-template-columns: 1fr; }
@@ -2134,6 +2201,14 @@ dialog .telemetry-file-list article { padding: 10px; }
   .owner-track-detail-hero > div { max-width: 100%; padding: 24px 20px 110px; }
   .owner-track-detail-map { top: auto; right: 20px; bottom: 12px; width: 150px; height: 86px; }
   .owner-track-detail-stats { grid-template-columns: 1fr; }
+  .season-scan-summary { grid-template-columns: 1fr; }
+  .round-card { grid-template-columns: 1fr; }
+  .round-card-visual { min-height: 105px; }
+  .round-card-stats { grid-template-columns: repeat(2, 1fr); }
+  .race-explorer-toolbar { grid-template-columns: 1fr; }
+  .race-search, .race-filter-summary { grid-column: auto; }
+  .race-week-header { grid-template-columns: 48px minmax(0, 1fr); }
+  .race-week-best { display: none; }
   .comparison-rival-bars button, .comparison-advantage-bars button { grid-template-columns: minmax(90px, .9fr) minmax(95px, 1.2fr) 48px; gap: 7px; }
   .comparison-advantage-scale { margin-left: 98px; margin-right: 56px; }
 }

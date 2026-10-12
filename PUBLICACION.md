@@ -15,6 +15,8 @@
   actualizar.
 - `0.7.x`: correcciones y mejoras compatibles con esta beta.
 - `0.8.0`: nuevas funciones relevantes.
+- `0.8.6`: búsqueda de series y pilotos, jornadas resumidas y carreras
+  agrupadas y filtrables por semana.
 - `1.0.0`: primera versión considerada estable.
 
 ## Preparar los archivos
@@ -25,8 +27,8 @@
 
 El proceso ejecuta las pruebas y genera en `release\`:
 
-- `GridScope-0.7.9-Windows.zip`
-- `GridScope-0.7.9-Source.zip`
+- `GridScope-0.8.6-Windows.zip`
+- `GridScope-0.8.6-Source.zip`
 
 Ninguno contiene bases de datos, resultados, copias de seguridad, cachés,
 credenciales o rutas personales.
@@ -50,10 +52,10 @@ Para validar también la sustitución segura del ejecutable y su copia anterior:
 ## Publicar en GitHub
 
 1. Revisa `git status` y crea el commit de la versión.
-2. Crea la etiqueta `v0.7.9`.
+2. Crea la etiqueta `v0.8.6`.
 3. Sube la rama y la etiqueta al repositorio.
 4. Abre **Releases → Draft a new release**.
-5. Selecciona `v0.7.9` y marca la versión como **Pre-release**.
+5. Selecciona `v0.8.6` y marca la versión como **Pre-release**.
 6. Adjunta ambos ZIP de `release\`.
 7. Utiliza el contenido de `CHANGELOG.md` como notas de la versión.
 

@@ -2,6 +2,18 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.8.6] - 2026-10-12
+
+- El selector de campeonatos incorpora búsqueda por serie o temporada y filtros
+  para consultar únicamente temporadas actuales o históricas.
+- La página de sesiones resume semanas, carreras, circuitos y mejor media antes
+  de mostrar cada jornada en tarjetas más claras y comparables.
+- Las carreras se agrupan por semana y pueden buscarse por circuito, trazado o
+  ganador, filtrarse por semana y ordenarse por fecha o mejor resultado.
+- La página de Pilotos permite buscar por nombre o ID dentro de recurrentes,
+  rivales de una coincidencia o la lista completa.
+- Las nuevas vistas reducen el desplazamiento y se adaptan a pantallas estrechas.
+
 ## [0.8.5] - 2026-10-11
 
 - El primer arranque manual después de actualizar reutiliza la pestaña que ya
