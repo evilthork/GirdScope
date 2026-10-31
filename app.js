@@ -6,6 +6,7 @@ let appState = {
   rounds: [],
   settings: {
     language: "",
+    theme: "gridscope",
     rankingMode: "weekly",
     minimumParticipation: 50,
     tiebreaker: "incidents",
@@ -118,8 +119,8 @@ let miniLeagueMinimumRaces = Math.min(
   999,
   Math.max(1, Number(localStorage.getItem("gridscope-mini-minimum-races")) || 2)
 );
-const LIST_PAGE_SIZES = { ownerRaces: 10, rounds: 8, races: 10, drivers: 12, progress: 12, rivals: 15, singleRivals: 15, miniEvents: 12 };
-let listPages = { ownerRaces: 1, rounds: 1, races: 1, drivers: 1, progress: 1, rivals: 1, singleRivals: 1, miniEvents: 1 };
+const LIST_PAGE_SIZES = { ownerRaces: 10, series: 8, rounds: 8, races: 10, drivers: 12, progress: 12, rivals: 15, singleRivals: 15, miniEvents: 12 };
+let listPages = { ownerRaces: 1, series: 1, rounds: 1, races: 1, drivers: 1, progress: 1, rivals: 1, singleRivals: 1, miniEvents: 1 };
 let activeDriverFilter = localStorage.getItem("gridscope-driver-filter") || "recurrent";
 if (!["recurrent", "single", "all"].includes(activeDriverFilter)) activeDriverFilter = "recurrent";
 let activeSettingsTab = localStorage.getItem("gridscope-settings-tab") || "general";
@@ -143,6 +144,24 @@ let raceExplorerSearch = "";
 let raceWeekFilter = "all";
 let raceOrderFilter = "recent";
 let driverSearch = "";
+let seriesExplorerSearch = "";
+let seriesExplorerFilter = "all";
+
+function applyTheme(theme, { persist = true } = {}) {
+  const selected = ["gridscope", "graphite", "light"].includes(theme) ? theme : "gridscope";
+  document.documentElement.dataset.theme = selected;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute(
+    "content",
+    selected === "light" ? "#f2f4f7" : selected === "graphite" ? "#101318" : "#0b0c0e"
+  );
+  document.querySelectorAll("[data-theme-option]").forEach((button) => {
+    const active = button.dataset.themeOption === selected;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-checked", String(active));
+  });
+  if (persist) localStorage.setItem("gridscope-theme", selected);
+  return selected;
+}
 
 function normalizeSearchTerm(value) {
   return String(value || "")
@@ -1306,6 +1325,125 @@ function renderRounds() {
   `).join("");
   document.querySelector("#roundPagination").innerHTML = paginationMarkup(
     "rounds", listPages.rounds, rounds.length, LIST_PAGE_SIZES.rounds, "jornadas"
+  );
+}
+
+function seriesVocabulary(platform) {
+  if (platform === "assetto-corsa") {
+    return {
+      eyebrow: "Campeonatos y servidores detectados",
+      title: "Series de Assetto Corsa",
+      description: "Agrupadas por campeonato o servidor a partir del historial de Content Manager.",
+      singular: "serie",
+      periods: "temporadas"
+    };
+  }
+  if (platform === "raceroom") {
+    return {
+      eyebrow: "Historial ranked organizado",
+      title: "Campeonatos de RaceRoom",
+      description: "Campeonatos ranked agrupados para consultar sus periodos y resultados.",
+      singular: "campeonato",
+      periods: "periodos"
+    };
+  }
+  return {
+    eyebrow: "Tu participación en iRacing",
+    title: "Series y temporadas",
+    description: "Todas las series oficiales importadas, agrupadas con sus temporadas y resultados.",
+    singular: "serie",
+    periods: "temporadas"
+  };
+}
+
+function renderSeriesExplorer() {
+  const container = document.querySelector("#seriesExplorer");
+  if (!container) return;
+  const platform = appState.settings.platform || appState.league.platform || "iracing";
+  const vocabulary = seriesVocabulary(platform);
+  document.querySelector("#seriesExplorerEyebrow").textContent = vocabulary.eyebrow;
+  document.querySelector("#seriesExplorerTitle").textContent = vocabulary.title;
+  document.querySelector("#seriesExplorerDescription").textContent = vocabulary.description;
+
+  const groups = new Map();
+  appState.leagues.forEach((league) => {
+    const name = league.seriesName || league.name || "Serie sin nombre";
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(league);
+  });
+  const series = Array.from(groups, ([name, leagues]) => {
+    const sorted = leagues.slice().sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || String(b.season).localeCompare(String(a.season)));
+    const primary = sorted.find((league) => league.isCurrent) || sorted[0];
+    return {
+      name,
+      leagues: sorted,
+      primary,
+      current: sorted.some((league) => league.isCurrent),
+      selected: sorted.some((league) => league.id === appState.league.id),
+      races: sorted.reduce((total, league) => total + Number(league.raceCount || 0), 0),
+      drivers: Math.max(0, ...sorted.map((league) => Number(league.driverCount || 0)))
+    };
+  }).sort((a, b) => Number(b.selected) - Number(a.selected) || Number(b.current) - Number(a.current) || b.races - a.races || a.name.localeCompare(b.name));
+
+  const term = normalizeSearchTerm(seriesExplorerSearch);
+  const filtered = series.filter((item) => {
+    if (seriesExplorerFilter === "current" && !item.current) return false;
+    if (seriesExplorerFilter === "historic" && item.current) return false;
+    if (!term) return true;
+    return normalizeSearchTerm([
+      item.name,
+      ...item.leagues.flatMap((league) => [league.season, league.car, league.setupType])
+    ].join(" ")).includes(term);
+  });
+  const totalRaces = series.reduce((total, item) => total + item.races, 0);
+  const totalPeriods = appState.leagues.length;
+  const currentCount = series.filter((item) => item.current).length;
+  document.querySelector("#seriesTabCount").textContent = `${series.length} ${series.length === 1 ? vocabulary.singular : `${vocabulary.singular}s`}`;
+  document.querySelector("#seriesOverview").innerHTML = `
+    <article><small>${platform === "raceroom" ? "Campeonatos" : "Series"}</small><strong>${series.length}</strong><span>agrupaciones diferentes</span></article>
+    <article><small>${vocabulary.periods}</small><strong>${totalPeriods}</strong><span>periodos guardados</span></article>
+    <article><small>Carreras</small><strong>${totalRaces}</strong><span>resultados importados</span></article>
+    <article><small>En curso</small><strong>${currentCount}</strong><span>${currentCount ? "con temporada actual" : "todo es histórico"}</span></article>`;
+  document.querySelectorAll("[data-series-filter]").forEach((button) => button.classList.toggle("active", button.dataset.seriesFilter === seriesExplorerFilter));
+  document.querySelector("#seriesFilterSummary").textContent = `${filtered.length} de ${series.length}`;
+
+  if (!filtered.length) {
+    container.innerHTML = `<article class="empty-archive"><h3>No se han encontrado series</h3><p>Prueba otro nombre, coche o temporada.</p></article>`;
+    document.querySelector("#seriesExplorerPagination").innerHTML = "";
+    return;
+  }
+  const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZES.series));
+  listPages.series = Math.min(listPages.series, totalPages);
+  const visibleSeries = filtered.slice(
+    (listPages.series - 1) * LIST_PAGE_SIZES.series,
+    listPages.series * LIST_PAGE_SIZES.series
+  );
+  container.innerHTML = visibleSeries.map((item) => {
+    const latest = item.primary;
+    const seasons = item.leagues.slice(0, 4);
+    return `
+      <article class="series-card ${item.selected ? "selected" : ""}">
+        <div class="series-card-identity">
+          <img src="${seriesLogoUrl(latest.seriesLogo, item.name)}" alt="" loading="lazy">
+          <div><span>${item.current ? "ACTUAL" : "HISTÓRICA"}</span><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(latest.car || latest.setupType || (platform === "assetto-corsa" ? "Campeonato detectado" : "Competición guardada"))}</p></div>
+        </div>
+        <div class="series-card-metrics">
+          <span><small>${vocabulary.periods}</small><strong>${item.leagues.length}</strong></span>
+          <span><small>Carreras</small><strong>${item.races}</strong></span>
+          <span><small>Pilotos</small><strong>${item.drivers || "—"}</strong></span>
+        </div>
+        <div class="series-season-list">
+          ${seasons.map((league) => `
+            <button type="button" data-series-league="${league.id}" class="${league.id === appState.league.id ? "active" : ""}">
+              <span><strong>${escapeHtml(shortSeason(league.season))}</strong><small>${Number(league.raceCount || 0)} carreras · ${Number(league.driverCount || 0)} pilotos</small></span>
+              <b>${league.isCurrent ? "Actual" : "Abrir"}</b>
+            </button>`).join("")}
+          ${item.leagues.length > seasons.length ? `<small class="series-more-periods">+${item.leagues.length - seasons.length} periodos anteriores</small>` : ""}
+        </div>
+      </article>`;
+  }).join("");
+  document.querySelector("#seriesExplorerPagination").innerHTML = paginationMarkup(
+    "series", listPages.series, filtered.length, LIST_PAGE_SIZES.series, vocabulary.singular === "campeonato" ? "campeonatos" : "series"
   );
 }
 
@@ -3612,6 +3750,7 @@ function renderSettings() {
   const isRaceRoom = platform === "raceroom";
   document.querySelector("#languageSetting").value =
     appState.settings.language || window.GridScopeI18n?.getLanguage() || "es";
+  applyTheme(appState.settings.theme || localStorage.getItem("gridscope-theme") || "gridscope");
   document.querySelector("#rankingModeSetting").value = appState.settings.rankingMode;
   document.querySelector("#minimumParticipationSetting").value = appState.settings.minimumParticipation;
   document.querySelector("#tiebreakerSetting").value = appState.settings.tiebreaker;
@@ -3646,40 +3785,59 @@ function renderSettings() {
     ? `Última sincronización: ${new Date(appState.settings.raceRoomLastSync).toLocaleString("es-ES")}.`
     : "Todavía no se ha sincronizado el historial ranked.";
   const demoPill = document.querySelector(".demo-pill");
+  demoPill.classList.toggle("data-ready", !appState.demoMode);
+  const storedResultCount = isAssetto || isRaceRoom
+    ? Number(appState.storage.raceCount || 0)
+    : Number(appState.storage.importCount || 0);
   demoPill.innerHTML = appState.demoMode
     ? `<span></span> ${uiText("Datos de demostración", "Demo data")}`
-    : `<span></span> ${isAssetto ? "Assetto Corsa" : isRaceRoom ? "RaceRoom" : uiText(
-        `${appState.storage.importCount} archivo${appState.storage.importCount === 1 ? "" : "s"} importado${appState.storage.importCount === 1 ? "" : "s"}`,
-        `${appState.storage.importCount} imported file${appState.storage.importCount === 1 ? "" : "s"}`
+    : `<span aria-hidden="true">✓</span> ${uiText(
+        `${storedResultCount} resultado${storedResultCount === 1 ? "" : "s"} guardado${storedResultCount === 1 ? "" : "s"}`,
+        `${storedResultCount} saved result${storedResultCount === 1 ? "" : "s"}`
       )}`;
 
   const oauth = appState.oauth || {};
   const oauthIcon = document.querySelector("#oauthIcon");
   const oauthDot = document.querySelector("#oauthStatusDot");
   const disconnectButton = document.querySelector("#disconnectButton");
-  const ownerCustomerId = String(appState.settings.ownerIracingId || "").trim();
-  document.querySelector("#oauthOwnerIdentity").textContent = ownerCustomerId
-    ? `Customer ID ${ownerCustomerId} · se utiliza para identificar tus resultados y comparativas.`
-    : "Todavía no se ha configurado el Customer ID del piloto de referencia.";
+  const ownerConfigured = Boolean(String(appState.settings.ownerIracingId || "").trim());
+  document.querySelector("#oauthOwnerIdentity").textContent = ownerConfigured
+    ? uiText(
+        "La identidad se utiliza localmente para reconocer tus resultados y comparativas.",
+        "The identity is used locally to recognize your results and comparisons."
+      )
+    : uiText(
+        "Todavía no se ha configurado el piloto de referencia.",
+        "The reference driver has not been configured yet."
+      );
   oauthIcon.classList.toggle("connected", Boolean(oauth.connected));
   oauthIcon.classList.toggle("disconnected", !oauth.connected);
   oauthDot.classList.toggle("warning", !oauth.connected);
   disconnectButton.hidden = !oauth.connected;
   const connectButton = document.querySelector("#connectButton");
   connectButton.disabled = !oauth.configured;
-  connectButton.textContent = oauth.connected ? "Volver a conectar" : "Conectar con iRacing";
+  connectButton.textContent = oauth.connected
+    ? uiText("Volver a conectar", "Reconnect")
+    : uiText("Conectar con iRacing", "Connect to iRacing");
   document.querySelector("#oauthStatusTitle").textContent = oauth.connected
-    ? oauth.profileName || "Cuenta conectada"
+    ? oauth.profileName || uiText("Cuenta conectada", "Account connected")
     : oauth.configured
-      ? "Integración preparada por GridScope"
-      : "Integración pendiente de iRacing";
+      ? uiText("Integración preparada por GridScope", "Integration managed by GridScope")
+      : uiText("Integración pendiente de iRacing", "iRacing integration pending");
   document.querySelector("#oauthStatusDetail").textContent = oauth.connected
-    ? `iRacing ID ${oauth.profileCustId || "validado"} · Tokens cifrados por Windows`
+    ? uiText(
+        "Cuenta autorizada en iRacing · Tokens cifrados por Windows",
+        "Account authorized by iRacing · Tokens encrypted by Windows"
+      )
     : oauth.configured
-      ? "Lista para autorizarse en la web oficial de iRacing."
-      : ownerCustomerId
-        ? `Tu Customer ID ${ownerCustomerId} sigue guardado. La importación mediante JSON continúa disponible.`
-        : "La importación mediante JSON continúa disponible mientras iRacing mantiene pausados los nuevos Client ID.";
+      ? uiText(
+          "Lista para autorizarse en la web oficial de iRacing.",
+          "Ready for authorization on the official iRacing website."
+        )
+      : uiText(
+          "La conexión directa aún no está disponible. La importación mediante JSON continúa disponible.",
+          "Direct connection is not available yet. JSON import remains available."
+        );
 
   const minimum = requiredWeeks();
   document.querySelector("#qualificationNote").innerHTML = `
@@ -3718,6 +3876,7 @@ function renderAll() {
   renderLeagueContext();
   renderRanking();
   renderRounds();
+  renderSeriesExplorer();
   renderDrivers();
   renderSettings();
   renderAllSectionTabs();
@@ -3770,6 +3929,8 @@ async function loadState({ quiet = false, preserveContext = false, showActivity 
     : null;
   try {
     appState = await apiRequest("/api/state");
+    const savedTheme = appState.settings.theme || localStorage.getItem("gridscope-theme") || "gridscope";
+    appState.settings.theme = applyTheme(savedTheme);
     const savedLanguage = appState.settings.language;
     const currentLanguage = window.GridScopeI18n?.getLanguage() || "es";
     if (savedLanguage && savedLanguage !== currentLanguage) {
@@ -3840,6 +4001,24 @@ document.querySelector("#menuButton").addEventListener("click", () => {
 mobileOverlay.addEventListener("click", closeMobileMenu);
 
 document.addEventListener("click", (event) => {
+  const seriesFilter = event.target.closest("[data-series-filter]");
+  if (seriesFilter) {
+    seriesExplorerFilter = seriesFilter.dataset.seriesFilter;
+    listPages.series = 1;
+    renderSeriesExplorer();
+    return;
+  }
+  const seriesLeague = event.target.closest("[data-series-league]");
+  if (seriesLeague) {
+    localStorage.setItem("gridscope-section-rounds", "weeks");
+    selectLeague(seriesLeague.dataset.seriesLeague)
+      .then(() => {
+        selectSectionTab("rounds", "weeks");
+        showToast("Temporada abierta", `${appState.league.seriesName} · ${shortSeason(appState.league.season)}`);
+      })
+      .catch((error) => showToast("No se ha podido abrir la temporada", error.message));
+    return;
+  }
   const sectionTab = event.target.closest("[data-section-tab]");
   if (sectionTab) {
     const group = sectionTab.closest("[data-section-tabs]")?.dataset.sectionTabs;
@@ -3891,6 +4070,7 @@ document.addEventListener("click", (event) => {
   listPages[target] += pageButton.dataset.pageDirection === "next" ? 1 : -1;
   listPages[target] = Math.max(1, listPages[target]);
   if (target === "ownerRaces") renderOwnerSeasonOverview();
+  else if (target === "series") renderSeriesExplorer();
   else if (target === "rounds") renderRounds();
   else if (target === "races") renderRaceExplorer();
   else if (target === "drivers") renderDrivers();
@@ -4352,6 +4532,11 @@ document.querySelector("#raceExplorerSearch").addEventListener("input", (event) 
   listPages.races = 1;
   renderRaceExplorer();
 });
+document.querySelector("#seriesExplorerSearch").addEventListener("input", (event) => {
+  seriesExplorerSearch = event.target.value;
+  listPages.series = 1;
+  renderSeriesExplorer();
+});
 document.querySelector("#raceWeekFilter").addEventListener("change", (event) => {
   raceWeekFilter = event.target.value;
   listPages.races = 1;
@@ -4529,29 +4714,42 @@ async function scanImportFolder({ quiet = false, background = false } = {}) {
   const scanButton = document.querySelector("#scanImportFolderButton");
   const activity = background
     ? null
-    : beginActivity("Buscando resultados de iRacing…", "Revisando los archivos JSON y descartando duplicados o sesiones que no son carrera.");
-  if (!background) setButtonBusy(scanButton, true, "Buscando JSON…");
-  if (!quiet) status.textContent = "Buscando archivos JSON…";
+    : beginActivity(
+        uiText("Buscando resultados de iRacing…", "Searching for iRacing results…"),
+        uiText("Revisando los archivos JSON y descartando duplicados o sesiones que no son carrera.", "Checking JSON files and excluding duplicates or non-race sessions.")
+      );
+  if (!background) setButtonBusy(scanButton, true, uiText("Buscando JSON…", "Searching JSON…"));
+  if (!quiet) status.textContent = uiText("Buscando archivos JSON…", "Searching JSON files…");
   try {
     const result = await apiRequest("/api/import/folder/scan", { method: "POST" });
     if (result.imported) {
       await loadState({ quiet: true, preserveContext: background });
     }
-    const summary = `${result.scanned} revisado${result.scanned === 1 ? "" : "s"} · ${result.imported} nuevo${result.imported === 1 ? "" : "s"} · ${result.duplicates} repetido${result.duplicates === 1 ? "" : "s"} · ${result.ignored} ignorado${result.ignored === 1 ? "" : "s"}`;
+    const summary = uiText(
+      `${result.scanned} revisado${result.scanned === 1 ? "" : "s"} · ${result.imported} nuevo${result.imported === 1 ? "" : "s"} · ${result.duplicates} repetido${result.duplicates === 1 ? "" : "s"} · ${result.ignored} ignorado${result.ignored === 1 ? "" : "s"}`,
+      `${result.scanned} checked · ${result.imported} new · ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} · ${result.ignored} ignored`
+    );
     const firstError = result.errors?.[0];
     status.textContent = firstError
-      ? `Última búsqueda: ${summary}. ${firstError.filename}: ${firstError.error}`
-      : `Última búsqueda: ${summary}`;
+      ? uiText(`Última búsqueda: ${summary}. ${firstError.filename}: ${firstError.error}`, `Last scan: ${summary}. ${firstError.filename}: ${firstError.error}`)
+      : uiText(`Última búsqueda: ${summary}`, `Last scan: ${summary}`);
     if (background && result.imported) {
       showToast(
-        `${result.imported} carrera${result.imported === 1 ? "" : "s"} nueva${result.imported === 1 ? "" : "s"}`,
-        "Datos actualizados en segundo plano.",
+        uiText(
+          `${result.imported} carrera${result.imported === 1 ? "" : "s"} nueva${result.imported === 1 ? "" : "s"}`,
+          `${result.imported} new race${result.imported === 1 ? "" : "s"}`
+        ),
+        uiText("Datos actualizados en segundo plano.", "Data updated in the background."),
         { subtle: true, duration: 1800 }
       );
     } else if (!quiet || result.imported) {
       showToast(
-        result.imported ? "Resultados nuevos importados" : firstError ? "Carpeta revisada con avisos" : "Carpeta revisada",
-        firstError ? `${summary} · Revisa el aviso en Configuración.` : summary
+        result.imported
+          ? uiText("Resultados nuevos importados", "New results imported")
+          : firstError
+            ? uiText("Carpeta revisada con avisos", "Folder checked with warnings")
+            : uiText("Carpeta revisada", "Folder checked"),
+        firstError ? uiText(`${summary} · Revisa el aviso en Configuración.`, `${summary} · Review the warning in Settings.`) : summary
       );
     }
     return result;
@@ -4560,7 +4758,7 @@ async function scanImportFolder({ quiet = false, background = false } = {}) {
       ? "El servidor estaba abierto desde una versión anterior. Cierra su ventana y vuelve a ejecutar abrir-aplicacion.ps1."
       : error.message;
     status.textContent = message;
-    if (!quiet) showToast("No se ha podido revisar la carpeta", message);
+    if (!quiet) showToast(uiText("No se ha podido revisar la carpeta", "The folder could not be checked"), message);
     return null;
   } finally {
     if (!background) setButtonBusy(scanButton, false);
@@ -4579,11 +4777,14 @@ async function saveImportFolderSettings({ scanAfterSave = true } = {}) {
     appState.settings.importFolder = saved.folder;
     appState.settings.autoScanImports = saved.autoScan;
     document.querySelector("#importFolderSetting").value = saved.folder;
-    showToast("Carpeta guardada", "GridScope buscará resultados JSON en esa ubicación.");
+    showToast(
+      uiText("Carpeta guardada", "Folder saved"),
+      uiText("GridScope buscará resultados JSON en esa ubicación.", "GridScope will search for JSON results in that location.")
+    );
     if (scanAfterSave) await scanImportFolder({ quiet: true });
     return true;
   } catch (error) {
-    showToast("Carpeta no válida", error.message);
+    showToast(uiText("Carpeta no válida", "Invalid folder"), error.message);
     return false;
   }
 }
@@ -4892,6 +5093,23 @@ document.querySelector("#languageSetting").addEventListener("change", async (eve
   } catch (error) {
     event.target.value = appState.settings.language || "es";
     showToast("No se ha guardado el idioma", error.message);
+  }
+});
+document.querySelector("#themePicker").addEventListener("click", async (event) => {
+  const option = event.target.closest("[data-theme-option]");
+  if (!option) return;
+  const previous = appState.settings.theme || "gridscope";
+  const theme = applyTheme(option.dataset.themeOption);
+  try {
+    await apiRequest("/api/theme", {
+      method: "PUT",
+      body: JSON.stringify({ theme })
+    });
+    appState.settings.theme = theme;
+    showToast("Apariencia actualizada", `Tema ${option.querySelector("strong")?.textContent || theme} aplicado.`);
+  } catch (error) {
+    applyTheme(previous);
+    showToast("No se ha guardado el tema", error.message);
   }
 });
 document.querySelector("#disconnectButton").addEventListener("click", async () => {

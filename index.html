@@ -8,6 +8,12 @@
       content="Estadísticas locales, comparativas y campeonatos para iRacing y Assetto Corsa."
     />
     <meta name="theme-color" content="#0b0c0e" />
+    <script>
+      (() => {
+        const theme = localStorage.getItem("gridscope-theme") || "gridscope";
+        document.documentElement.dataset.theme = ["gridscope", "graphite", "light"].includes(theme) ? theme : "gridscope";
+      })();
+    </script>
     <title>GridScope — Racing Stats</title>
     <link rel="icon" href="assets/gridscope-logo.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -413,10 +419,29 @@
             </div>
           </div>
           <nav class="content-tabs view-content-tabs" aria-label="Secciones de sesiones" data-section-tabs="rounds">
-            <button class="content-tab active" type="button" data-section-tab="weeks"><span>Jornadas</span><small id="roundsTabCount">0 semanas</small></button>
+            <button class="content-tab active" type="button" data-section-tab="series"><span>Series</span><small id="seriesTabCount">0 series</small></button>
+            <button class="content-tab" type="button" data-section-tab="weeks"><span>Jornadas</span><small id="roundsTabCount">0 semanas</small></button>
             <button class="content-tab" type="button" data-section-tab="races"><span>Carreras</span><small id="racesTabCount">0 resultados</small></button>
           </nav>
-          <div class="content-tab-panel active" data-section-panel="rounds:weeks">
+          <div class="content-tab-panel active" data-section-panel="rounds:series">
+            <div class="series-explorer-heading">
+              <div><p class="eyebrow" id="seriesExplorerEyebrow">Tu historial organizado</p><h2 id="seriesExplorerTitle">Series y temporadas</h2><p id="seriesExplorerDescription">Encuentra rápidamente qué has corrido y abre la temporada que quieras consultar.</p></div>
+              <label class="compact-search series-search" for="seriesExplorerSearch">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+                <input id="seriesExplorerSearch" type="search" placeholder="Buscar serie, coche o temporada…" autocomplete="off" />
+              </label>
+            </div>
+            <div class="series-overview" id="seriesOverview"></div>
+            <div class="series-filter-bar" role="group" aria-label="Filtrar series">
+              <button class="active" type="button" data-series-filter="all">Todas</button>
+              <button type="button" data-series-filter="current">Actuales</button>
+              <button type="button" data-series-filter="historic">Históricas</button>
+              <span id="seriesFilterSummary"></span>
+            </div>
+            <div class="series-explorer-grid" id="seriesExplorer"></div>
+            <div class="table-pagination" id="seriesExplorerPagination"></div>
+          </div>
+          <div class="content-tab-panel" data-section-panel="rounds:weeks" hidden>
           <div class="season-scan-summary" id="roundSeasonSummary"></div>
           <div class="round-list" id="roundList"></div>
           <div class="table-pagination" id="roundPagination"></div>
@@ -688,11 +713,11 @@
               <h3>API OAuth de iRacing <span class="optional-label">Opcional</span></h3>
               <div class="connection-box saved-identity-box">
                 <span class="status-dot"></span>
-                <div><strong>Piloto de referencia conservado</strong><small id="oauthOwnerIdentity">Customer ID de iRacing guardado en GridScope.</small></div>
+                <div><strong>Piloto de referencia configurado</strong><small id="oauthOwnerIdentity">La identidad se utiliza localmente para reconocer tus resultados y comparativas.</small></div>
               </div>
               <div class="connection-box">
                 <span class="status-dot warning" id="oauthStatusDot"></span>
-                <div><strong id="oauthStatusTitle">API OAuth no conectada</strong><small id="oauthStatusDetail">Esta conexión no afecta a tu Customer ID ni a las carreras importadas.</small></div>
+                <div><strong id="oauthStatusTitle">Conexión con iRacing pendiente</strong><small id="oauthStatusDetail">La importación mediante JSON continúa disponible.</small></div>
               </div>
               <div class="connection-box managed-connection-box">
                 <span class="status-dot"></span>
@@ -838,12 +863,34 @@
                 <small>El cambio se aplica a toda la interfaz y queda guardado en este ordenador.</small>
               </label>
             </section>
+            <section class="panel settings-card theme-settings-card" data-settings-group="application">
+              <div class="settings-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a1.5 1.5 0 0 1 0-3h3a6 6 0 0 0 0-12h-3Z" /><path d="M7.5 9h.01M9 6.5h.01M6.5 13h.01" /></svg></div>
+              <h3>Apariencia</h3>
+              <p class="settings-card-intro">Elige el estilo visual que prefieras.</p>
+              <div class="theme-picker" id="themePicker" role="radiogroup" aria-label="Tema visual">
+                <button class="theme-option" type="button" data-theme-option="gridscope" role="radio">
+                  <span class="theme-preview gridscope-preview"><i></i><i></i><i></i></span>
+                  <span><strong>GridScope</strong><small>El diseño original</small></span>
+                  <b>✓</b>
+                </button>
+                <button class="theme-option" type="button" data-theme-option="graphite" role="radio">
+                  <span class="theme-preview graphite-preview"><i></i><i></i><i></i></span>
+                  <span><strong>Graphite</strong><small>Oscuro, neutro y compacto</small></span>
+                  <b>✓</b>
+                </button>
+                <button class="theme-option" type="button" data-theme-option="light" role="radio">
+                  <span class="theme-preview light-preview"><i></i><i></i><i></i></span>
+                  <span><strong>Claro</strong><small>Alta legibilidad con luz</small></span>
+                  <b>✓</b>
+                </button>
+              </div>
+            </section>
             <section class="panel settings-card" data-settings-group="application">
               <div class="settings-icon"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8m-1-5h20v5H2V3Zm8 9h4" /></svg></div>
               <h3 data-generic-data-title>Datos locales</h3>
               <div class="data-row"><span>Temporadas guardadas</span><strong id="archiveCount">0</strong></div>
               <div class="data-row"><span>Carreras almacenadas</span><strong id="storedRaceCount">18</strong></div>
-              <div class="data-row"><span>Archivos importados</span><strong id="importedFileCount">0</strong></div>
+              <div class="data-row"><span>Resultados importados</span><strong id="importedFileCount">0</strong></div>
               <div class="data-row"><span>Telemetrías indexadas</span><strong id="storedTelemetryCount">0</strong></div>
               <div class="data-row"><span>Última copia</span><strong id="lastBackup">Sin copias</strong></div>
               <button class="secondary-button wide" type="button" id="backupButton">Crear copia de seguridad</button>

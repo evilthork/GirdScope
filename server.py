@@ -43,7 +43,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.9.0"
+APP_VERSION = "0.10.0"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -3784,6 +3784,7 @@ class DataStore:
             "rounds": rounds,
             "settings": {
                 "language": settings.get("language", ""),
+                "theme": settings.get("theme", "gridscope"),
                 "rankingMode": settings.get("ranking_mode", "weekly"),
                 "minimumParticipation": int(settings.get("minimum_participation", "50")),
                 "tiebreaker": settings.get("tiebreaker", "incidents"),
@@ -8136,6 +8137,20 @@ class DataStore:
             )
         return {"language": language}
 
+    def save_theme(self, value: str) -> dict[str, str]:
+        theme = str(value or "").strip().lower()
+        if theme not in {"gridscope", "graphite", "light"}:
+            raise ValueError("El tema seleccionado no es válido")
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO settings (key, value) VALUES ('theme', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (theme,),
+            )
+        return {"theme": theme}
+
     def get_update_preferences(self) -> dict[str, Any]:
         with self.connect() as connection:
             rows = connection.execute(
@@ -8853,6 +8868,12 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
                 payload = self.read_json()
                 self.send_json(
                     self.store.save_language(str(payload.get("language", "")))
+                )
+                return
+            if path == "/api/theme":
+                payload = self.read_json()
+                self.send_json(
+                    self.store.save_theme(str(payload.get("theme", "")))
                 )
                 return
             if path == "/api/simulators/active":

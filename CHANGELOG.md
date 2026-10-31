@@ -2,6 +2,21 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.10.0] - 2026-10-31
+
+- Se incorpora un selector de apariencia persistente con los temas GridScope,
+  Graphite y Claro.
+- Sesiones estrena un explorador de series con búsqueda, filtros de temporadas
+  actuales e históricas y paginación para evitar listados interminables.
+- Cada serie reúne sus temporadas, carreras y pilotos en paneles más legibles y
+  permite abrir directamente cualquiera de los periodos guardados.
+- La organización se adapta a las series oficiales de iRacing, los campeonatos
+  o servidores de Assetto Corsa y los campeonatos ranked de RaceRoom.
+- El indicador superior muestra resultados guardados con un estado neutro y
+  sustituye la referencia técnica a archivos importados.
+- Se completan textos dinámicos de Configuración en inglés y se eliminan de la
+  interfaz pública referencias personales o específicas de una instalación.
+
 ## [0.9.0] - 2026-10-31
 
 - GridScope incorpora una interfaz bilingüe en español e inglés, con detección
