@@ -39,6 +39,7 @@ try {
         --name GridScope `
         --add-data "index.html;." `
         --add-data "app.js;." `
+        --add-data "i18n.js;." `
         --add-data "styles.css;." `
         --add-data "actualizar-gridscope.ps1;." `
         --add-data "assets;assets" `

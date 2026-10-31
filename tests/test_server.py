@@ -446,10 +446,10 @@ class DataStoreTests(unittest.TestCase):
         self.assertIn("Provisional", {row[-1] for row in rows[1:]})
 
     def test_oauth_authorization_uses_pkce_and_one_time_state(self):
-        self.store.save_oauth_client_id("public-client-123")
-        authorization = create_oauth_authorization(
-            self.store, "http://127.0.0.1:4173/oauth/callback"
-        )
+        with patch("server.OAUTH_CLIENT_ID", "public-client-123"):
+            authorization = create_oauth_authorization(
+                self.store, "http://127.0.0.1:4173/oauth/callback"
+            )
         query = parse_qs(urlparse(authorization["authorizationUrl"]).query)
 
         self.assertEqual(query["client_id"], ["public-client-123"])
@@ -461,7 +461,6 @@ class DataStoreTests(unittest.TestCase):
             self.store.consume_oauth_session(query["state"][0])
 
     def test_oauth_tokens_are_protected_and_can_be_disconnected(self):
-        self.store.save_oauth_client_id("public-client-123")
         self.store.save_oauth_tokens(
             {
                 "access_token": "access-secret",
@@ -473,7 +472,8 @@ class DataStoreTests(unittest.TestCase):
             {"iracing_name": "Test Driver", "iracing_cust_id": 12345},
         )
 
-        status = self.store.get_oauth_status()
+        with patch("server.OAUTH_CLIENT_ID", "public-client-123"):
+            status = self.store.get_oauth_status()
         tokens = self.store.get_oauth_tokens()
         with self.store.connect() as connection:
             stored = connection.execute(
@@ -487,6 +487,12 @@ class DataStoreTests(unittest.TestCase):
 
         self.store.disconnect_oauth()
         self.assertFalse(self.store.get_oauth_status()["connected"])
+
+    def test_language_is_saved_independently(self):
+        self.assertEqual(self.store.save_language("en"), {"language": "en"})
+        self.assertEqual(self.store.get_state()["settings"]["language"], "en")
+        with self.assertRaisesRegex(ValueError, "idioma"):
+            self.store.save_language("fr")
 
     def test_iracing_json_is_normalized(self):
         fixture = Path(__file__).parent / "fixtures" / "iracing-result.json"

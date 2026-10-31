@@ -5,6 +5,7 @@ let appState = {
   drivers: [],
   rounds: [],
   settings: {
+    language: "",
     rankingMode: "weekly",
     minimumParticipation: 50,
     tiebreaker: "incidents",
@@ -17,7 +18,7 @@ let appState = {
   },
   oauth: {
     configured: false,
-    clientId: "",
+    managedByApp: false,
     connected: false,
     profileName: null,
     profileCustId: null
@@ -36,6 +37,22 @@ const pageTitles = {
   history: "Archivo global",
   settings: "Configuración"
 };
+
+function uiText(spanish, english) {
+  return window.GridScopeI18n?.getLanguage() === "en" ? english : spanish;
+}
+
+function localizedUpdateReason(message) {
+  const reasons = {
+    "No hay versiones publicadas en este canal.": "There are no releases in this channel.",
+    "GridScope ya está actualizado.": "GridScope is already up to date.",
+    "Esta instalación se ejecuta desde el código fuente; descarga la nueva versión manualmente.": "This installation is running from source; download the new version manually.",
+    "La instalación automática está disponible en Windows.": "Automatic installation is available on Windows.",
+    "La versión no contiene un paquete Windows válido.": "This release does not contain a valid Windows package.",
+    "El paquete publicado no incluye una firma SHA-256 válida.": "The published package does not include a valid SHA-256 signature."
+  };
+  return window.GridScopeI18n?.getLanguage() === "en" ? reasons[message] || message : message;
+}
 
 const rankingBody = document.querySelector("#rankingBody");
 const rankingButtons = document.querySelectorAll("[data-ranking]");
@@ -352,32 +369,38 @@ function renderUpdateStatus(status) {
   const notice = document.querySelector("#updateNotice");
   dot.classList.toggle("warning", Boolean(status.available));
   title.textContent = status.available
-    ? `GridScope ${status.latestVersion} disponible`
-    : "GridScope está actualizado";
+    ? uiText(`GridScope ${status.latestVersion} disponible`, `GridScope ${status.latestVersion} is available`)
+    : uiText("GridScope está actualizado", "GridScope is up to date");
   detail.textContent = status.available
-    ? `Instalada ${status.currentVersion} · canal ${status.channel === "stable" ? "Estable" : "Beta"}`
-    : `Versión instalada ${status.currentVersion} · canal ${status.channel === "stable" ? "Estable" : "Beta"}`;
+    ? uiText(
+        `Instalada ${status.currentVersion} · canal ${status.channel === "stable" ? "Estable" : "Beta"}`,
+        `Installed ${status.currentVersion} · ${status.channel === "stable" ? "Stable" : "Beta"} channel`
+      )
+    : uiText(
+        `Versión instalada ${status.currentVersion} · canal ${status.channel === "stable" ? "Estable" : "Beta"}`,
+        `Installed version ${status.currentVersion} · ${status.channel === "stable" ? "Stable" : "Beta"} channel`
+      );
   document.querySelector("#updateCheckStatus").textContent = status.available
     ? status.canInstall
-      ? "La actualización está preparada para descargarse e instalarse."
-      : status.installReason
-    : status.installReason || "No hay una versión más reciente en este canal.";
+      ? uiText("La actualización está preparada para descargarse e instalarse.", "The update is ready to download and install.")
+      : localizedUpdateReason(status.installReason)
+    : localizedUpdateReason(status.installReason) || uiText("No hay una versión más reciente en este canal.", "There is no newer version in this channel.");
   document.querySelector("#updateReleaseName").textContent =
     status.name || `GridScope ${status.latestVersion}`;
   document.querySelector("#updateReleaseBody").textContent =
-    status.notes || "Esta versión no incluye notas adicionales.";
+    status.notes || uiText("Esta versión no incluye notas adicionales.", "This release does not include additional notes.");
   notes.hidden = !status.available;
   installButton.hidden = !status.available;
   installButton.textContent = status.canInstall
-    ? "Descargar e instalar"
-    : "Abrir página de descarga";
+    ? uiText("Descargar e instalar", "Download and install")
+    : uiText("Abrir página de descarga", "Open download page");
   installButton.dataset.updateAction = status.canInstall ? "install" : "download";
   if (status.available) {
     document.querySelector("#updateNoticeTitle").textContent =
-      `GridScope ${status.latestVersion} disponible`;
+      uiText(`GridScope ${status.latestVersion} disponible`, `GridScope ${status.latestVersion} is available`);
     document.querySelector("#updateNoticeMessage").textContent = status.canInstall
-      ? "Puedes descargarla e instalarla sin perder tus datos."
-      : "Consulta las novedades y descarga la nueva versión.";
+      ? uiText("Puedes descargarla e instalarla sin perder tus datos.", "You can download and install it without losing your data.")
+      : uiText("Consulta las novedades y descarga la nueva versión.", "Review what's new and download the new version.");
     notice.hidden = false;
   }
 }
@@ -399,11 +422,11 @@ async function checkForUpdates({ manual = false, force = false } = {}) {
   const button = document.querySelector("#checkUpdatesButton");
   const activity = manual
     ? beginActivity(
-        "Buscando actualizaciones…",
-        "Consultando las versiones publicadas de GridScope en GitHub."
+        uiText("Buscando actualizaciones…", "Checking for updates…"),
+        uiText("Consultando las versiones publicadas de GridScope en GitHub.", "Checking GridScope releases published on GitHub.")
       )
     : null;
-  if (manual) setButtonBusy(button, true, "Buscando…");
+  if (manual) setButtonBusy(button, true, uiText("Buscando…", "Checking…"));
   try {
     const query = new URLSearchParams({
       channel: updatePreferences.channel,
@@ -413,16 +436,18 @@ async function checkForUpdates({ manual = false, force = false } = {}) {
     renderUpdateStatus(status);
     if (manual) {
       showToast(
-        status.available ? `GridScope ${status.latestVersion} disponible` : "GridScope está actualizado",
         status.available
-          ? "Revisa las novedades y decide cuándo instalarla."
-          : `Ya utilizas la versión ${status.currentVersion}.`
+          ? uiText(`GridScope ${status.latestVersion} disponible`, `GridScope ${status.latestVersion} is available`)
+          : uiText("GridScope está actualizado", "GridScope is up to date"),
+        status.available
+          ? uiText("Revisa las novedades y decide cuándo instalarla.", "Review what's new and choose when to install it.")
+          : uiText(`Ya utilizas la versión ${status.currentVersion}.`, `You are already using version ${status.currentVersion}.`)
       );
     }
     return status;
   } catch (error) {
     document.querySelector("#updateCheckStatus").textContent = error.message;
-    if (manual) showToast("No se han podido buscar actualizaciones", error.message);
+    if (manual) showToast(uiText("No se han podido buscar actualizaciones", "Unable to check for updates"), error.message);
     return null;
   } finally {
     if (manual) setButtonBusy(button, false);
@@ -440,16 +465,16 @@ async function initializeUpdateSystem() {
     installedAppVersion = health.version || "";
     renderUpdatePreferences();
     document.querySelector("#updateStatusDetail").textContent =
-      `Versión instalada ${installedAppVersion}`;
+      uiText(`Versión instalada ${installedAppVersion}`, `Installed version ${installedAppVersion}`);
     document.querySelector("#updateCheckStatus").textContent = preferences.automatic
-      ? "La comprobación automática está activada."
-      : "La comprobación automática está desactivada.";
+      ? uiText("La comprobación automática está activada.", "Automatic update checks are enabled.")
+      : uiText("La comprobación automática está desactivada.", "Automatic update checks are disabled.");
     if (preferences.automatic) {
       window.setTimeout(() => checkForUpdates(), 1400);
     }
   } catch {
     document.querySelector("#updateCheckStatus").textContent =
-      "Las actualizaciones se pueden comprobar manualmente.";
+      uiText("Las actualizaciones se pueden comprobar manualmente.", "You can check for updates manually.");
   }
 }
 
@@ -462,7 +487,7 @@ document.querySelector("#updateChannelSetting").addEventListener("change", async
     await saveUpdatePreferences();
     await checkForUpdates({ manual: true, force: true });
   } catch (error) {
-    showToast("No se ha guardado el canal", error.message);
+    showToast(uiText("No se ha guardado el canal", "Update channel was not saved"), error.message);
   }
 });
 
@@ -470,17 +495,19 @@ document.querySelector("#autoCheckUpdatesSetting").addEventListener("change", as
   try {
     const preferences = await saveUpdatePreferences();
     document.querySelector("#updateCheckStatus").textContent = preferences.automatic
-      ? "GridScope buscará nuevas versiones al iniciarse."
-      : "La búsqueda automática está desactivada; puedes comprobarla manualmente.";
+      ? uiText("GridScope buscará nuevas versiones al iniciarse.", "GridScope will check for new versions at startup.")
+      : uiText("La búsqueda automática está desactivada; puedes comprobarla manualmente.", "Automatic checks are disabled; you can check manually.");
     showToast(
-      preferences.automatic ? "Comprobación automática activada" : "Comprobación automática desactivada",
       preferences.automatic
-        ? "La búsqueda se hará en segundo plano y nunca instalará nada sin tu permiso."
-        : "GridScope solo buscará versiones nuevas cuando pulses el botón."
+        ? uiText("Comprobación automática activada", "Automatic checks enabled")
+        : uiText("Comprobación automática desactivada", "Automatic checks disabled"),
+      preferences.automatic
+        ? uiText("La búsqueda se hará en segundo plano y nunca instalará nada sin tu permiso.", "The check runs in the background and never installs anything without your permission.")
+        : uiText("GridScope solo buscará versiones nuevas cuando pulses el botón.", "GridScope will only check for new versions when you press the button.")
     );
   } catch (error) {
     renderUpdatePreferences();
-    showToast("No se ha guardado la preferencia", error.message);
+    showToast(uiText("No se ha guardado la preferencia", "Preference was not saved"), error.message);
   }
 });
 
@@ -496,25 +523,31 @@ document.querySelector("#installUpdateButton").addEventListener("click", async (
     return;
   }
   const accepted = window.confirm(
-    `Se descargará GridScope ${currentUpdateStatus.latestVersion} y se guardará una copia de la versión actual. GridScope se cerrará para instalarla y después tendrás que volver a abrirlo. Tus datos locales no se modificarán.\n\n¿Continuar?`
+    uiText(
+      `Se descargará GridScope ${currentUpdateStatus.latestVersion} y se guardará una copia de la versión actual. GridScope se cerrará para instalarla y después tendrás que volver a abrirlo. Tus datos locales no se modificarán.\n\n¿Continuar?`,
+      `GridScope ${currentUpdateStatus.latestVersion} will be downloaded and the current version will be backed up. GridScope will close for installation, and you will then need to open it again. Your local data will not be changed.\n\nContinue?`
+    )
   );
   if (!accepted) return;
   const overlay = document.querySelector("#updateInstallingOverlay");
   overlay.hidden = false;
-  setButtonBusy(button, true, "Descargando…");
+  setButtonBusy(button, true, uiText("Descargando…", "Downloading…"));
   try {
     await apiRequest("/api/update/install", {
       method: "POST",
       body: JSON.stringify({ channel: updatePreferences.channel })
     });
     waitForUpdatedServer(currentUpdateStatus.latestVersion);
-    document.querySelector("#updateInstallingTitle").textContent = "Cerrando GridScope para actualizar…";
+    document.querySelector("#updateInstallingTitle").textContent = uiText("Cerrando GridScope para actualizar…", "Closing GridScope for the update…");
     document.querySelector("#updateInstallingDetail").textContent =
-      "Cuando aparezca el mensaje de actualización completada, vuelve a abrir GridScope. Esta pestaña se recargará sola.";
+      uiText(
+        "Cuando aparezca el mensaje de actualización completada, vuelve a abrir GridScope. Esta pestaña se recargará sola.",
+        "When the update-complete message appears, open GridScope again. This tab will reload automatically."
+      );
   } catch (error) {
     overlay.hidden = true;
     setButtonBusy(button, false);
-    showToast("No se ha podido iniciar la actualización", error.message);
+    showToast(uiText("No se ha podido iniciar la actualización", "The update could not be started"), error.message);
   }
 });
 
@@ -3110,10 +3143,10 @@ function renderLeagueContext() {
   document.querySelector(".league-dot").textContent = seriesInitials(appState.league.seriesName);
   document.querySelector("#sidebarSeriesName").textContent = appState.league.seriesName;
   document.querySelector("#sidebarSeasonName").textContent =
-    `${shortSeason(appState.league.season)} · ${appState.league.isCurrent ? "Actual" : "Histórica"}`;
+    `${shortSeason(appState.league.season)} · ${appState.league.isCurrent ? uiText("Actual", "Current") : uiText("Histórica", "Historical")}`;
   document.querySelector("#topbarSeriesName").textContent = appState.league.seriesName;
   document.querySelector("#topbarSeasonName").textContent =
-    `${shortSeason(appState.league.season)} · ${appState.league.isCurrent ? "Temporada actual" : "Histórica"}`;
+    `${shortSeason(appState.league.season)} · ${appState.league.isCurrent ? uiText("Temporada actual", "Current season") : uiText("Histórica", "Historical")}`;
   renderLeagueMenu();
   document.title = `GridScope — ${appState.league.seriesName}`;
   const seasonBadge = document.querySelector("#seasonStatusBadge");
@@ -3577,6 +3610,8 @@ function renderSettings() {
   const platform = appState.settings.platform || appState.league.platform;
   const isAssetto = platform === "assetto-corsa";
   const isRaceRoom = platform === "raceroom";
+  document.querySelector("#languageSetting").value =
+    appState.settings.language || window.GridScopeI18n?.getLanguage() || "es";
   document.querySelector("#rankingModeSetting").value = appState.settings.rankingMode;
   document.querySelector("#minimumParticipationSetting").value = appState.settings.minimumParticipation;
   document.querySelector("#tiebreakerSetting").value = appState.settings.tiebreaker;
@@ -3612,11 +3647,13 @@ function renderSettings() {
     : "Todavía no se ha sincronizado el historial ranked.";
   const demoPill = document.querySelector(".demo-pill");
   demoPill.innerHTML = appState.demoMode
-    ? "<span></span> Datos de demostración"
-    : `<span></span> ${isAssetto ? "Assetto Corsa" : isRaceRoom ? "RaceRoom" : `${appState.storage.importCount} archivo${appState.storage.importCount === 1 ? "" : "s"} importado${appState.storage.importCount === 1 ? "" : "s"}`}`;
+    ? `<span></span> ${uiText("Datos de demostración", "Demo data")}`
+    : `<span></span> ${isAssetto ? "Assetto Corsa" : isRaceRoom ? "RaceRoom" : uiText(
+        `${appState.storage.importCount} archivo${appState.storage.importCount === 1 ? "" : "s"} importado${appState.storage.importCount === 1 ? "" : "s"}`,
+        `${appState.storage.importCount} imported file${appState.storage.importCount === 1 ? "" : "s"}`
+      )}`;
 
   const oauth = appState.oauth || {};
-  const oauthInput = document.querySelector("#oauthClientId");
   const oauthIcon = document.querySelector("#oauthIcon");
   const oauthDot = document.querySelector("#oauthStatusDot");
   const disconnectButton = document.querySelector("#disconnectButton");
@@ -3624,24 +3661,25 @@ function renderSettings() {
   document.querySelector("#oauthOwnerIdentity").textContent = ownerCustomerId
     ? `Customer ID ${ownerCustomerId} · se utiliza para identificar tus resultados y comparativas.`
     : "Todavía no se ha configurado el Customer ID del piloto de referencia.";
-  oauthInput.value = oauth.clientId || "";
   oauthIcon.classList.toggle("connected", Boolean(oauth.connected));
   oauthIcon.classList.toggle("disconnected", !oauth.connected);
   oauthDot.classList.toggle("warning", !oauth.connected);
   disconnectButton.hidden = !oauth.connected;
-  document.querySelector("#connectButton").textContent = oauth.connected ? "Volver a conectar la API" : "Guardar y conectar la API";
+  const connectButton = document.querySelector("#connectButton");
+  connectButton.disabled = !oauth.configured;
+  connectButton.textContent = oauth.connected ? "Volver a conectar" : "Conectar con iRacing";
   document.querySelector("#oauthStatusTitle").textContent = oauth.connected
     ? oauth.profileName || "Cuenta conectada"
     : oauth.configured
-      ? "Cliente configurado"
-      : "API OAuth no conectada";
+      ? "Integración preparada por GridScope"
+      : "Integración pendiente de iRacing";
   document.querySelector("#oauthStatusDetail").textContent = oauth.connected
     ? `iRacing ID ${oauth.profileCustId || "validado"} · Tokens cifrados por Windows`
     : oauth.configured
-      ? "Listo para iniciar sesión en la web oficial de iRacing."
+      ? "Lista para autorizarse en la web oficial de iRacing."
       : ownerCustomerId
-        ? `Tu Customer ID ${ownerCustomerId} sigue guardado. La API es una conexión independiente y opcional.`
-        : "La API es opcional y utiliza un Client ID distinto del Customer ID del piloto.";
+        ? `Tu Customer ID ${ownerCustomerId} sigue guardado. La importación mediante JSON continúa disponible.`
+        : "La importación mediante JSON continúa disponible mientras iRacing mantiene pausados los nuevos Client ID.";
 
   const minimum = requiredWeeks();
   document.querySelector("#qualificationNote").innerHTML = `
@@ -3732,9 +3770,21 @@ async function loadState({ quiet = false, preserveContext = false, showActivity 
     : null;
   try {
     appState = await apiRequest("/api/state");
+    const savedLanguage = appState.settings.language;
+    const currentLanguage = window.GridScopeI18n?.getLanguage() || "es";
+    if (savedLanguage && savedLanguage !== currentLanguage) {
+      window.GridScopeI18n?.setLanguage(savedLanguage);
+    } else if (!savedLanguage) {
+      appState.settings.language = currentLanguage;
+      apiRequest("/api/language", {
+        method: "PUT",
+        body: JSON.stringify({ language: currentLanguage })
+      }).catch(() => {});
+    }
     document.querySelector("#backendStatus").textContent = "Base local activa";
     document.querySelector("#backendDetail").textContent = "SQLite · Solo este ordenador";
     renderAll();
+    window.GridScopeI18n?.apply(document);
     await loadRaceAnalytics();
     restoreInterfaceContext(interfaceContext);
     if (!quiet) showToast("Datos actualizados", "La información se ha leído desde la base de datos local.");
@@ -4822,20 +4872,26 @@ document.querySelector("#backupButton").addEventListener("click", async () => {
 });
 
 document.querySelector("#connectButton").addEventListener("click", async () => {
-  const clientId = document.querySelector("#oauthClientId").value.trim();
-  if (!clientId) {
-    showToast("Falta el Client ID", "Introduce el identificador emitido por iRacing.");
-    return;
-  }
   try {
-    await apiRequest("/api/oauth/config", {
-      method: "PUT",
-      body: JSON.stringify({ clientId })
-    });
     const authorization = await apiRequest("/api/oauth/start");
     window.location.assign(authorization.authorizationUrl);
   } catch (error) {
     showToast("No se puede iniciar la conexión", error.message);
+  }
+});
+document.querySelector("#languageSetting").addEventListener("change", async (event) => {
+  const language = event.target.value;
+  try {
+    await apiRequest("/api/language", {
+      method: "PUT",
+      body: JSON.stringify({ language })
+    });
+    appState.settings.language = language;
+    window.GridScopeI18n?.setLanguage(language);
+    window.location.reload();
+  } catch (error) {
+    event.target.value = appState.settings.language || "es";
+    showToast("No se ha guardado el idioma", error.message);
   }
 });
 document.querySelector("#disconnectButton").addEventListener("click", async () => {
@@ -4871,11 +4927,14 @@ document.querySelector("#driverForm").addEventListener("submit", async (event) =
   }
 });
 
-document.querySelector(".page-kicker").textContent = new Intl.DateTimeFormat("es-ES", {
+document.querySelector(".page-kicker").textContent = new Intl.DateTimeFormat(
+  window.GridScopeI18n?.locale() || "es-ES",
+  {
   weekday: "long",
   day: "numeric",
   month: "long"
-}).format(new Date());
+  }
+).format(new Date());
 
 const savedView = localStorage.getItem("apex-active-view");
 if (savedView && document.getElementById(savedView)) switchView(savedView);

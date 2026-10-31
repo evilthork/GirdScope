@@ -2,6 +2,21 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.9.0] - 2026-10-31
+
+- GridScope incorpora una interfaz bilingüe en español e inglés, con detección
+  inicial, selector en Configuración y preferencia persistente en la base local.
+- Se traducen la navegación, las ayudas, las vistas principales y los estados
+  dinámicos del sistema de actualizaciones.
+- La conexión OAuth de iRacing pasa a estar gestionada por GridScope: el usuario
+  ya no tiene que introducir ni conservar un Client ID.
+- El flujo de autorización continúa usando Authorization Code con PKCE y nunca
+  incluye un `client_secret` en la aplicación de escritorio.
+- Las instalaciones de pruebas anteriores conservan silenciosamente el Client
+  ID que ya tuvieran guardado hasta disponer del identificador oficial.
+- Los paquetes de Windows y de código fuente incluyen el nuevo sistema de
+  traducciones y la configuración interna del cliente OAuth.
+
 ## [0.8.7] - 2026-10-12
 
 - La consola de GridScope muestra claramente la versión que se está ejecutando.

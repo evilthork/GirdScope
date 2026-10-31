@@ -34,6 +34,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
+from oauth_config import IRACING_OAUTH_CLIENT_ID
+
 
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 INSTALL_DIR = (
@@ -41,7 +43,7 @@ INSTALL_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent
 )
-APP_VERSION = "0.8.7"
+APP_VERSION = "0.9.0"
 LEGACY_DB_PATH = INSTALL_DIR / "data" / "apex-local.db"
 LOCAL_APP_DATA = Path(
     os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
@@ -63,6 +65,7 @@ TRACK_MAP_CACHE_DIR = DEFAULT_DB_PATH.parent / "image-cache" / "track-maps"
 OAUTH_AUTHORIZE_URL = "https://oauth.iracing.com/oauth2/authorize"
 OAUTH_TOKEN_URL = "https://oauth.iracing.com/oauth2/token"
 OAUTH_PROFILE_URL = "https://oauth.iracing.com/oauth2/iracing/profile"
+OAUTH_CLIENT_ID = IRACING_OAUTH_CLIENT_ID.strip()
 RACEROOM_BASE_URL = "https://game.raceroom.com"
 UPDATE_REPOSITORY = "evilthork/GirdScope"
 UPDATE_RELEASES_URL = (
@@ -3780,6 +3783,7 @@ class DataStore:
             "drivers": drivers,
             "rounds": rounds,
             "settings": {
+                "language": settings.get("language", ""),
                 "rankingMode": settings.get("ranking_mode", "weekly"),
                 "minimumParticipation": int(settings.get("minimum_participation", "50")),
                 "tiebreaker": settings.get("tiebreaker", "incidents"),
@@ -8118,6 +8122,20 @@ class DataStore:
             "platform": platform,
         }
 
+    def save_language(self, value: str) -> dict[str, str]:
+        language = str(value or "").strip().lower()
+        if language not in {"es", "en"}:
+            raise ValueError("El idioma seleccionado no es válido")
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO settings (key, value) VALUES ('language', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (language,),
+            )
+        return {"language": language}
+
     def get_update_preferences(self) -> dict[str, Any]:
         with self.connect() as connection:
             rows = connection.execute(
@@ -8154,21 +8172,11 @@ class DataStore:
                 )
         return {"automatic": automatic, "channel": channel}
 
-    def save_oauth_client_id(self, client_id: str) -> dict[str, Any]:
-        normalized = client_id.strip()
-        if not 3 <= len(normalized) <= 200 or any(character.isspace() for character in normalized):
-            raise ValueError("El client ID de iRacing no es válido")
-        with self.connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO settings (key, value) VALUES ('oauth_client_id', ?)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value
-                """,
-                (normalized,),
-            )
-        return self.get_oauth_status()
-
     def get_oauth_client_id(self) -> str:
+        if OAUTH_CLIENT_ID:
+            return OAUTH_CLIENT_ID
+        # Migración silenciosa para instalaciones de pruebas anteriores. El
+        # campo ya no se expone ni puede modificarse desde la interfaz.
         with self.connect() as connection:
             row = connection.execute(
                 "SELECT value FROM settings WHERE key = 'oauth_client_id'"
@@ -8188,7 +8196,7 @@ class DataStore:
         if not token:
             return {
                 "configured": bool(client_id),
-                "clientId": client_id,
+                "managedByApp": bool(OAUTH_CLIENT_ID),
                 "connected": False,
                 "profileName": None,
                 "profileCustId": None,
@@ -8198,7 +8206,7 @@ class DataStore:
             }
         return {
             "configured": bool(client_id),
-            "clientId": client_id,
+            "managedByApp": bool(OAUTH_CLIENT_ID),
             "connected": True,
             "profileName": token["profile_name"],
             "profileCustId": token["profile_cust_id"],
@@ -8841,6 +8849,12 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
                     self.store.save_update_preferences(self.read_json())
                 )
                 return
+            if path == "/api/language":
+                payload = self.read_json()
+                self.send_json(
+                    self.store.save_language(str(payload.get("language", "")))
+                )
+                return
             if path == "/api/simulators/active":
                 payload = self.read_json()
                 self.send_json(
@@ -8849,12 +8863,6 @@ class ApexRequestHandler(SimpleHTTPRequestHandler):
                 return
             if path == "/api/simulators/config":
                 self.send_json(self.store.save_simulator_config(self.read_json()))
-                return
-            if path == "/api/oauth/config":
-                payload = self.read_json()
-                self.send_json(
-                    self.store.save_oauth_client_id(str(payload.get("clientId", "")))
-                )
                 return
             if path == "/api/import/folder":
                 payload = self.read_json()
