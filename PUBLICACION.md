@@ -17,7 +17,7 @@
 - `0.8.0`: nuevas funciones relevantes.
 - `0.8.6`: búsqueda de series y pilotos, jornadas resumidas y carreras
   agrupadas y filtrables por semana.
-- `0.10.0`: temas visuales y explorador de series adaptado a cada simulador.
+- `0.10.1`: traducciones dinámicas completas y contexto visual con imágenes y logos.
 - `1.0.0`: primera versión considerada estable.
 
 ## Preparar los archivos
@@ -28,8 +28,8 @@
 
 El proceso ejecuta las pruebas y genera en `release\`:
 
-- `GridScope-0.10.0-Windows.zip`
-- `GridScope-0.10.0-Source.zip`
+- `GridScope-0.10.1-Windows.zip`
+- `GridScope-0.10.1-Source.zip`
 
 Ninguno contiene bases de datos, resultados, copias de seguridad, cachés,
 credenciales o rutas personales.
@@ -53,10 +53,10 @@ Para validar también la sustitución segura del ejecutable y su copia anterior:
 ## Publicar en GitHub
 
 1. Revisa `git status` y crea el commit de la versión.
-2. Crea la etiqueta `v0.10.0`.
+2. Crea la etiqueta `v0.10.1`.
 3. Sube la rama y la etiqueta al repositorio.
 4. Abre **Releases → Draft a new release**.
-5. Selecciona `v0.10.0` y marca la versión como **Pre-release**.
+5. Selecciona `v0.10.1` y marca la versión como **Pre-release**.
 6. Adjunta ambos ZIP de `release\`.
 7. Utiliza el contenido de `CHANGELOG.md` como notas de la versión.
 

@@ -727,6 +727,7 @@ svg {
 .archive-year-group > summary::-webkit-details-marker { display: none; }
 .archive-series-group > summary:hover { background: rgba(255,255,255,.025); }
 .archive-series-icon { width: 38px; height: 38px; display: grid; flex: 0 0 auto; place-items: center; color: var(--archive-accent); border-radius: 10px; background: color-mix(in srgb, var(--archive-accent) 12%, transparent); font: 800 10px/1 "Manrope", sans-serif; }
+.archive-series-icon img { width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 5px 9px rgba(0,0,0,.3)); }
 .archive-series-copy { min-width: 0; }
 .archive-series-copy strong, .archive-series-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-series-copy strong { font: 700 12px/1.2 "Manrope", sans-serif; }
@@ -747,6 +748,8 @@ svg {
 .archive-year-grid { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 10px; padding: 10px; }
 .season-overview-card {
   min-width: 0;
+  position: relative;
+  overflow: hidden;
   padding: 18px;
   color: var(--text);
   text-align: left;
@@ -757,6 +760,10 @@ svg {
   transition: .2s ease;
   box-shadow: inset 0 2px var(--season-accent, var(--series-accent));
 }
+.season-card-logo { position: absolute; top: 47px; right: 16px; width: 48px; height: 48px; padding: 5px; object-fit: contain; border: 1px solid var(--border); border-radius: 11px; background: rgba(8,10,12,.68); box-shadow: 0 10px 24px rgba(0,0,0,.24); }
+.season-overview-card > .eyebrow,
+.season-overview-card > h3,
+.season-overview-card > .season-car { padding-right: 60px; }
 .season-overview-card:hover { transform: translateY(-2px); border-color: rgba(255,122,47,.35); }
 .season-overview-card.selected { border-color: rgba(255,122,47,.55); box-shadow: inset 0 0 0 1px rgba(255,122,47,.12); }
 .season-card-head { min-height: 21px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
@@ -910,6 +917,32 @@ tbody tr:last-child td { border-bottom: 0; }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 5px 0 22px; }
 .section-heading h2 { margin: 0; font: 800 27px/1.1 "Manrope", sans-serif; letter-spacing: -.03em; }
 .section-heading p:last-child { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
+.view-visual-banner {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  gap: 15px;
+  margin: -7px 0 18px;
+  padding: 15px 19px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+  isolation: isolate;
+  box-shadow: 0 12px 30px rgba(0,0,0,.12);
+}
+.view-visual-photo { position: absolute; z-index: -3; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 55%; opacity: .72; }
+.view-visual-shade { position: absolute; z-index: -2; inset: 0; background: linear-gradient(90deg, rgba(8,10,12,.96) 0%, rgba(8,10,12,.83) 38%, rgba(8,10,12,.38) 72%, rgba(8,10,12,.82) 100%), linear-gradient(0deg, rgba(var(--series-accent-rgb),.08), transparent); }
+.view-visual-logo { width: 65px; height: 58px; flex: 0 0 auto; padding: 7px; object-fit: contain; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; background: rgba(8,10,12,.72); filter: drop-shadow(0 10px 18px rgba(0,0,0,.4)); }
+.view-visual-copy { min-width: 0; }
+.view-visual-copy small, .view-visual-copy strong, .view-visual-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.view-visual-copy small { color: var(--series-accent); font-size: 7px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.view-visual-copy strong { margin-top: 5px; font: 800 16px/1.15 "Manrope", sans-serif; }
+.view-visual-copy span { margin-top: 5px; color: var(--muted); font-size: 8px; }
+.view-visual-meta { display: flex; gap: 8px; margin-left: auto; }
+.view-visual-meta span { min-width: 70px; padding: 9px 11px; color: var(--muted); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; background: rgba(8,10,12,.62); font-size: 7px; text-align: center; }
+.view-visual-meta b { display: block; margin-bottom: 3px; color: var(--text); font: 800 13px/1 "Manrope", sans-serif; }
 .section-actions { display: flex; gap: 8px; }
 .season-scan-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 12px; }
 .season-scan-summary article { padding: 13px 14px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255,255,255,.018); }
@@ -1084,7 +1117,17 @@ tbody tr:last-child td { border-bottom: 0; }
 .chart-series-1 { --chart-color: #5d91ff; }
 .evolution-chart { display: block; width: 100%; height: auto; margin-top: 3px; overflow: visible; }
 .chart-grid-line line { stroke: rgba(255,255,255,.075); stroke-width: 1; stroke-dasharray: 4 5; }
-.chart-grid-line text, .chart-date-label { fill: var(--subtle); font-size: 9px; }
+.chart-grid-line text, .chart-date-label {
+  fill: var(--muted);
+  stroke: none;
+  filter: none;
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 8px;
+  font-weight: 500;
+  paint-order: normal;
+  text-shadow: none;
+}
+.chart-date-label { font-size: 7px; }
 .chart-line { fill: none; stroke: var(--chart-color); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .chart-line.chart-series-1 { stroke-width: 2; stroke-dasharray: 6 5; opacity: .9; }
 .chart-point { fill: var(--chart-color); stroke: #101214; stroke-width: 2; cursor: pointer; transition: r .15s ease, filter .15s ease; }
@@ -2279,6 +2322,10 @@ dialog .telemetry-file-list article { padding: 10px; }
   .segmented-control { width: 100%; }
   .segmented-control button { flex: 1; }
   .section-heading { align-items: flex-start; flex-direction: column; }
+  .view-visual-banner { min-height: 88px; padding: 13px; }
+  .view-visual-logo { width: 52px; height: 50px; }
+  .view-visual-copy strong { font-size: 13px; }
+  .view-visual-meta { display: none; }
   .section-actions { width: 100%; }
   .section-actions button { flex: 1; }
   .season-scan-summary { grid-template-columns: repeat(2, 1fr); }

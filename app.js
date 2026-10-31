@@ -39,8 +39,35 @@ const pageTitles = {
   settings: "Configuración"
 };
 
+const englishPageTitles = {
+  overview: "Season overview",
+  rounds: "Sessions and races",
+  drivers: "League drivers",
+  rivals: "Comparisons and rivals",
+  "mini-leagues": "GridScope Championships",
+  history: "Global archive",
+  settings: "Settings"
+};
+
 function uiText(spanish, english) {
   return window.GridScopeI18n?.getLanguage() === "en" ? english : spanish;
+}
+
+function localizedChampionshipLabel(value) {
+  const label = String(value || "");
+  if (window.GridScopeI18n?.getLanguage() !== "en") return label;
+  const monthNames = {
+    Enero: "January", Febrero: "February", Marzo: "March", Abril: "April",
+    Mayo: "May", Junio: "June", Julio: "July", Agosto: "August",
+    Septiembre: "September", Octubre: "October", Noviembre: "November", Diciembre: "December"
+  };
+  return Object.entries(monthNames).reduce(
+    (translated, [spanish, english]) => translated.replace(new RegExp(`^${spanish}(?=\\s|$)`, "i"), english),
+    label
+      .replace(/Temporada\s+(\d+)/gi, "Season $1")
+      .replace(/^Todo el historial$/i, "All history")
+      .replace(/^Sin datos$/i, "No data")
+  );
 }
 
 function localizedUpdateReason(message) {
@@ -178,11 +205,11 @@ function paginationMarkup(target, page, totalItems, pageSize, noun) {
   const first = (safePage - 1) * pageSize + 1;
   const last = Math.min(safePage * pageSize, totalItems);
   return `
-    <span>${first}–${last} de ${totalItems} ${noun}</span>
+    <span>${uiText(`${first}–${last} de ${totalItems} ${noun}`, `${first}–${last} of ${totalItems} ${noun}`)}</span>
     <div>
-      <button class="secondary-button" type="button" data-list-page="${target}" data-page-direction="previous" ${safePage <= 1 ? "disabled" : ""}>Anterior</button>
-      <strong>Página ${safePage} de ${totalPages}</strong>
-      <button class="secondary-button" type="button" data-list-page="${target}" data-page-direction="next" ${safePage >= totalPages ? "disabled" : ""}>Siguiente</button>
+      <button class="secondary-button" type="button" data-list-page="${target}" data-page-direction="previous" ${safePage <= 1 ? "disabled" : ""}>${uiText("Anterior", "Previous")}</button>
+      <strong>${uiText(`Página ${safePage} de ${totalPages}`, `Page ${safePage} of ${totalPages}`)}</strong>
+      <button class="secondary-button" type="button" data-list-page="${target}" data-page-direction="next" ${safePage >= totalPages ? "disabled" : ""}>${uiText("Siguiente", "Next")}</button>
     </div>`;
 }
 
@@ -709,13 +736,16 @@ async function chooseSimulator(simulator) {
 }
 
 function formatDecimal(value) {
-  return Number(value || 0).toFixed(2).replace(".", ",");
+  return Number(value || 0).toLocaleString(window.GridScopeI18n?.locale() || "es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }
 
 function driverIdentityText(driverId) {
   const platform = appState.settings.platform || appState.league.platform;
-  if (platform === "assetto-corsa") return "Piloto de Assetto Corsa";
-  if (platform === "raceroom") return "Piloto de RaceRoom";
+  if (platform === "assetto-corsa") return uiText("Piloto de Assetto Corsa", "Assetto Corsa driver");
+  if (platform === "raceroom") return uiText("Piloto de RaceRoom", "RaceRoom driver");
   return `ID ${driverId}`;
 }
 
@@ -727,7 +757,7 @@ function aliasesFromField(selector) {
 }
 
 function formatInteger(value) {
-  return Number(value || 0).toLocaleString("es-ES");
+  return Number(value || 0).toLocaleString(window.GridScopeI18n?.locale() || "es-ES");
 }
 
 function formatLapTime(value) {
@@ -741,12 +771,12 @@ function formatLapTime(value) {
 function formatSigned(value, suffix = "") {
   const number = Number(value);
   if (!Number.isFinite(number)) return "—";
-  return `${number > 0 ? "+" : ""}${number.toLocaleString("es-ES", { maximumFractionDigits: 2 })}${suffix}`;
+  return `${number > 0 ? "+" : ""}${number.toLocaleString(window.GridScopeI18n?.locale() || "es-ES", { maximumFractionDigits: 2 })}${suffix}`;
 }
 
 function formatRaceDate(value) {
-  if (!value) return "Fecha desconocida";
-  return new Date(value).toLocaleString("es-ES", {
+  if (!value) return uiText("Fecha desconocida", "Unknown date");
+  return new Date(value).toLocaleString(window.GridScopeI18n?.locale() || "es-ES", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -826,6 +856,44 @@ function seriesLogoUrl(logo, seriesName) {
     ? "Serie de Assetto Corsa"
     : platform === "raceroom" ? "Serie de RaceRoom" : "Serie iRacing";
   return `/api/assets/series?logo=${encodeURIComponent(String(logo || ""))}&name=${encodeURIComponent(String(seriesName || fallbackName))}&platform=${encodeURIComponent(platform)}`;
+}
+
+function renderViewVisualBanners() {
+  const latestRound = appState.rounds?.at(-1);
+  const raceCount = Number(appState.storage?.raceCount || appState.rounds?.length || 0);
+  const driverCount = Number(appState.drivers?.length || 0);
+  const labels = {
+    drivers: uiText("Parrilla de la temporada", "Season grid"),
+    rivals: uiText("Historial compartido", "Shared history"),
+    "mini-leagues": uiText("Competición activa", "Active competition"),
+    history: uiText("Contexto del archivo", "Archive context")
+  };
+  Object.entries(labels).forEach(([viewId, label]) => {
+    const view = document.querySelector(`#${viewId}`);
+    const heading = view?.querySelector(":scope > .section-heading");
+    if (!view || !heading) return;
+    let banner = view.querySelector(":scope > .view-visual-banner");
+    if (!banner) {
+      banner = document.createElement("aside");
+      banner.className = "view-visual-banner";
+      heading.insertAdjacentElement("afterend", banner);
+    }
+    const trackName = latestRound?.track || appState.league.seriesName;
+    const layout = latestRound?.layout || "";
+    banner.innerHTML = `
+      <img class="view-visual-photo" src="${trackImageUrl(trackName, layout)}" alt="" loading="lazy">
+      <div class="view-visual-shade"></div>
+      <img class="view-visual-logo" src="${seriesLogoUrl(appState.league.seriesLogo, appState.league.seriesName)}" alt="" loading="lazy">
+      <div class="view-visual-copy">
+        <small>${label}</small>
+        <strong>${escapeHtml(appState.league.seriesName)}</strong>
+        <span>${escapeHtml(latestRound ? `${latestRound.track} · ${latestRound.layout || uiText("Trazado principal", "Main layout")}` : shortSeason(appState.league.season))}</span>
+      </div>
+      <div class="view-visual-meta">
+        <span><b>${formatInteger(raceCount)}</b>${uiText("carreras", "races")}</span>
+        <span><b>${formatInteger(driverCount)}</b>${uiText("pilotos", "drivers")}</span>
+      </div>`;
+  });
 }
 
 function trackMapUrl(trackId, trackName, layout = "") {
@@ -1465,13 +1533,23 @@ function movingAverage(values, windowSize = 3) {
   });
 }
 
+function formatChartDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  return new Intl.DateTimeFormat(window.GridScopeI18n?.locale() || "es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "2-digit"
+  }).format(date);
+}
+
 function evolutionChartMarkup({ title, description, races, series, formatter = formatDecimal, invert = false, official = false, minimumZero = false }) {
   const width = 720;
   const height = 245;
   const plot = { left: 54, right: 18, top: 24, bottom: 40 };
   const values = series.flatMap((item) => item.values).filter((value) => value != null && Number.isFinite(Number(value))).map(Number);
   if (!values.length) {
-    return `<article class="evolution-chart-card empty"><div class="evolution-chart-title"><div><small>${official ? "VALOR OFICIAL" : "MÉTRICA GRIDSCOPE"}</small><h4>${escapeHtml(title)}</h4></div></div><p>${escapeHtml(description)}</p><div class="chart-empty">No hay suficientes valores guardados para dibujar esta evolución.</div></article>`;
+    return `<article class="evolution-chart-card empty"><div class="evolution-chart-title"><div><small>${official ? uiText("VALOR OFICIAL", "OFFICIAL VALUE") : uiText("MÉTRICA GRIDSCOPE", "GRIDSCOPE METRIC")}</small><h4>${escapeHtml(title)}</h4></div></div><p>${escapeHtml(description)}</p><div class="chart-empty">${uiText("No hay suficientes valores guardados para dibujar esta evolución.", "There are not enough saved values to chart this trend.")}</div></article>`;
   }
   let minimum = Math.min(...values);
   let maximum = Math.max(...values);
@@ -1505,7 +1583,7 @@ function evolutionChartMarkup({ title, description, races, series, formatter = f
     <path class="chart-line chart-series-${seriesIndex}" d="${pathFor(item)}"></path>
     ${item.values.map((value, index) => value == null ? "" : `
       <circle class="chart-point chart-series-${seriesIndex}" cx="${x(index)}" cy="${y(value)}" r="4" tabindex="0" role="button" data-chart-race-id="${races[index].eventId}" aria-label="${escapeHtml(`${item.label}: ${formatter(value)} en ${races[index].track}`)}">
-        <title>${escapeHtml(`${formatRaceDate(races[index].startTime)} · ${races[index].track} · ${item.label}: ${formatter(value)}`)}</title>
+        <title>${escapeHtml(`${formatChartDate(races[index].startTime)} · ${races[index].track} · ${item.label}: ${formatter(value)}`)}</title>
       </circle>`).join("")}
   `).join("");
   const latestSeries = series[0].values.filter((value) => value != null);
@@ -1513,19 +1591,19 @@ function evolutionChartMarkup({ title, description, races, series, formatter = f
   const latest = latestSeries.at(-1);
   const change = first == null || latest == null ? null : latest - first;
   const dateLabels = races.length
-    ? `<text class="chart-date-label" x="${plot.left}" y="${height - 12}" text-anchor="start">${escapeHtml(formatRaceDate(races[0].startTime))}</text><text class="chart-date-label" x="${width - plot.right}" y="${height - 12}" text-anchor="end">${escapeHtml(formatRaceDate(races.at(-1).startTime))}</text>`
+    ? `<text class="chart-date-label" x="${plot.left}" y="${height - 12}" text-anchor="start">${escapeHtml(formatChartDate(races[0].startTime))}</text><text class="chart-date-label" x="${width - plot.right}" y="${height - 12}" text-anchor="end">${escapeHtml(formatChartDate(races.at(-1).startTime))}</text>`
     : "";
   return `
     <article class="evolution-chart-card">
       <div class="evolution-chart-title">
-        <div><small>${official ? "VALOR OFICIAL" : "MÉTRICA GRIDSCOPE"}</small><h4>${escapeHtml(title)}</h4><p>${escapeHtml(description)}</p></div>
-        <span><strong>${latest == null ? "—" : escapeHtml(formatter(latest))}</strong><em class="${change > 0 ? "positive" : change < 0 ? "negative" : ""}">${change == null ? "Sin variación" : formatSigned(change)}</em></span>
+        <div><small>${official ? uiText("VALOR OFICIAL", "OFFICIAL VALUE") : uiText("MÉTRICA GRIDSCOPE", "GRIDSCOPE METRIC")}</small><h4>${escapeHtml(title)}</h4><p>${escapeHtml(description)}</p></div>
+        <span><strong>${latest == null ? "—" : escapeHtml(formatter(latest))}</strong><em class="${change > 0 ? "positive" : change < 0 ? "negative" : ""}">${change == null ? uiText("Sin variación", "No change") : formatSigned(change)}</em></span>
       </div>
       <div class="chart-legend">${series.map((item, index) => `<span><i class="chart-series-${index}"></i>${escapeHtml(item.label)}</span>`).join("")}</div>
       <svg class="evolution-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Evolución de ${escapeHtml(title)}">
         ${grid}${paths}${dateLabels}
       </svg>
-      <small class="chart-interaction-hint">Pulsa un punto para abrir esa carrera.</small>
+      <small class="chart-interaction-hint">${uiText("Pulsa un punto para abrir esa carrera.", "Select a point to open that race.")}</small>
     </article>`;
 }
 
@@ -1687,13 +1765,13 @@ function renderRaceExplorer() {
 
 function rivalBalanceChartMarkup(rivals) {
   if (!rivals.length) {
-    return '<article class="comparison-rival-chart empty"><div><small>DUELOS DIRECTOS</small><h4>Balance contra recurrentes</h4></div><p class="chart-empty">Se necesitan al menos dos carreras compartidas con un mismo rival.</p></article>';
+    return `<article class="comparison-rival-chart empty"><div><small>${uiText("DUELOS DIRECTOS", "HEAD-TO-HEAD")}</small><h4>${uiText("Balance contra recurrentes", "Recurring rival record")}</h4></div><p class="chart-empty">${uiText("Se necesitan al menos dos carreras compartidas con un mismo rival.", "At least two shared races with the same rival are required.")}</p></article>`;
   }
   const visible = rivals.slice().sort((a, b) => b.meetings - a.meetings || b.winRate - a.winRate).slice(0, 10);
   return `
     <article class="comparison-rival-chart">
-      <div class="comparison-chart-title"><div><small>DUELOS DIRECTOS</small><h4>Balance contra recurrentes</h4><p>Reparte cada coincidencia según quién terminó delante. Pulsa un rival para abrir el historial compartido.</p></div></div>
-      <div class="comparison-rival-legend"><span><i class="owner"></i>Tú delante</span><span><i class="rival"></i>Rival delante</span><span><i class="tie"></i>Empates</span></div>
+      <div class="comparison-chart-title"><div><small>${uiText("DUELOS DIRECTOS", "HEAD-TO-HEAD")}</small><h4>${uiText("Balance contra recurrentes", "Recurring rival record")}</h4><p>${uiText("Reparte cada coincidencia según quién terminó delante. Pulsa un rival para abrir el historial compartido.", "Each match is split by who finished ahead. Select a rival to open the shared history.")}</p></div></div>
+      <div class="comparison-rival-legend"><span><i class="owner"></i>${uiText("Tú delante", "You ahead")}</span><span><i class="rival"></i>${uiText("Rival delante", "Rival ahead")}</span><span><i class="tie"></i>${uiText("Empates", "Ties")}</span></div>
       <div class="comparison-rival-bars">
         ${visible.map((rival) => {
           const total = Math.max(1, rival.ownerAhead + rival.rivalAhead + (rival.ties || 0));
@@ -1709,14 +1787,14 @@ function rivalBalanceChartMarkup(rivals) {
 
 function rivalAdvantageChartMarkup(rivals) {
   if (!rivals.length) {
-    return '<article class="comparison-rival-chart empty"><div><small>DIFERENCIA MEDIA</small><h4>Ventaja de posición</h4></div><p class="chart-empty">Todavía no hay rivales recurrentes para comparar.</p></article>';
+    return `<article class="comparison-rival-chart empty"><div><small>${uiText("DIFERENCIA MEDIA", "AVERAGE GAP")}</small><h4>${uiText("Ventaja de posición", "Position advantage")}</h4></div><p class="chart-empty">${uiText("Todavía no hay rivales recurrentes para comparar.", "There are no recurring rivals to compare yet.")}</p></article>`;
   }
   const visible = rivals.slice().sort((a, b) => Math.abs(b.averagePositionAdvantage) - Math.abs(a.averagePositionAdvantage)).slice(0, 10);
   const maximum = Math.max(1, ...visible.map((rival) => Math.abs(rival.averagePositionAdvantage || 0)));
   return `
     <article class="comparison-rival-chart">
-      <div class="comparison-chart-title"><div><small>DIFERENCIA MEDIA</small><h4>Ventaja de posición</h4><p>Promedio de tu posición final menos la del rival: a la derecha terminas más adelante; a la izquierda, el rival.</p></div></div>
-      <div class="comparison-advantage-scale"><span>Rival delante</span><i></i><span>Tú delante</span></div>
+      <div class="comparison-chart-title"><div><small>${uiText("DIFERENCIA MEDIA", "AVERAGE GAP")}</small><h4>${uiText("Ventaja de posición", "Position advantage")}</h4><p>${uiText("Promedio de tu posición final menos la del rival: a la derecha terminas más adelante; a la izquierda, el rival.", "Average finishing-position gap: right means you finish ahead; left means the rival does.")}</p></div></div>
+      <div class="comparison-advantage-scale"><span>${uiText("Rival delante", "Rival ahead")}</span><i></i><span>${uiText("Tú delante", "You ahead")}</span></div>
       <div class="comparison-advantage-bars">
         ${visible.map((rival) => {
           const value = Number(rival.averagePositionAdvantage) || 0;
@@ -1743,29 +1821,29 @@ function renderComparisonCharts() {
   const races = sourceRaces.map((race) => ({ ...race, eventId: race.id }));
   const platform = rivalAnalysis.platform || appState.settings.platform || appState.league.platform || "iracing";
   const incidentDescription = platform === "assetto-corsa"
-    ? "Incidentes registrados por Content Manager en cada carrera y tendencia móvil de tres resultados."
+    ? uiText("Incidentes registrados por Content Manager en cada carrera y tendencia móvil de tres resultados.", "Incidents recorded by Content Manager in each race and a three-result moving trend.")
     : platform === "raceroom"
-      ? "Incident Points publicados por RaceRoom y tendencia móvil de tres resultados."
-      : "Incidentes oficiales de iRacing y tendencia móvil de tres resultados.";
+      ? uiText("Incident Points publicados por RaceRoom y tendencia móvil de tres resultados.", "Incident Points published by RaceRoom and a three-result moving trend.")
+      : uiText("Incidentes oficiales de iRacing y tendencia móvil de tres resultados.", "Official iRacing incidents and a three-result moving trend.");
   const recurrentRivals = rivalAnalysis.rivals.filter((rival) => rival.meetings >= 2);
   const incidents = sourceRaces.map((race) => race.ownerResult.incidents);
   const cards = [
     evolutionChartMarkup({
-      title: "Salida y llegada",
-      description: "Muestra si avanzaste o perdiste posiciones en cada carrera; cuanto más arriba, mejor.",
+      title: uiText("Salida y llegada", "Start and finish"),
+      description: uiText("Muestra si avanzaste o perdiste posiciones en cada carrera; cuanto más arriba, mejor.", "Shows whether you gained or lost positions in each race; higher is better."),
       races,
       series: [
-        { label: "Salida", values: sourceRaces.map((race) => race.ownerResult.startPosition) },
-        { label: "Meta", values: sourceRaces.map((race) => race.ownerResult.finishPosition) }
+        { label: uiText("Salida", "Start"), values: sourceRaces.map((race) => race.ownerResult.startPosition) },
+        { label: uiText("Meta", "Finish"), values: sourceRaces.map((race) => race.ownerResult.finishPosition) }
       ],
       formatter: (value) => `P${Math.round(value)}`,
       invert: true
     }),
     evolutionChartMarkup({
-      title: "Incidentes por carrera",
+      title: uiText("Incidentes por carrera", "Incidents per race"),
       description: incidentDescription,
       races,
-      series: [{ label: "Por carrera", values: incidents }, { label: "Tendencia (3)", values: movingAverage(incidents) }],
+      series: [{ label: uiText("Por carrera", "Per race"), values: incidents }, { label: uiText("Tendencia (3)", "Trend (3)"), values: movingAverage(incidents) }],
       formatter: (value) => `${formatDecimal(value)}x`,
       invert: true,
       minimumZero: true
@@ -1773,7 +1851,10 @@ function renderComparisonCharts() {
     rivalBalanceChartMarkup(recurrentRivals),
     rivalAdvantageChartMarkup(recurrentRivals)
   ];
-  document.querySelector("#comparisonChartsDescription").textContent = `${sourceRaces.length} carrera${sourceRaces.length === 1 ? "" : "s"} visible${sourceRaces.length === 1 ? "" : "s"} · ${recurrentRivals.length} rival${recurrentRivals.length === 1 ? "" : "es"} con dos coincidencias o más.`;
+  document.querySelector("#comparisonChartsDescription").textContent = uiText(
+    `${sourceRaces.length} carrera${sourceRaces.length === 1 ? "" : "s"} visible${sourceRaces.length === 1 ? "" : "s"} · ${recurrentRivals.length} rival${recurrentRivals.length === 1 ? "" : "es"} con dos coincidencias o más.`,
+    `${sourceRaces.length} visible race${sourceRaces.length === 1 ? "" : "s"} · ${recurrentRivals.length} rival${recurrentRivals.length === 1 ? "" : "s"} with two or more matches.`
+  );
   container.innerHTML = cards.join("");
 }
 
@@ -1781,12 +1862,12 @@ function renderRivals() {
   const summary = rivalAnalysis.summary || {};
   const owner = rivalAnalysis.owner;
   document.querySelector("#rivalIntro").textContent = owner
-    ? `${owner.name}: rendimiento frente a los pilotos con los que has compartido carrera.`
-    : "Configura tu ID de iRacing para activar las comparativas.";
+    ? uiText(`${owner.name}: rendimiento frente a los pilotos con los que has compartido carrera.`, `${owner.name}: performance against drivers you have raced with.`)
+    : uiText("Configura tu ID de iRacing para activar las comparativas.", "Configure your iRacing ID to enable comparisons.");
   document.querySelector("#comparisonSummary").innerHTML = `
-    <article class="comparison-stat"><small>Carreras analizadas</small><strong>${summary.races || 0}</strong><span>con tu piloto presente</span></article>
-    <article class="comparison-stat"><small>Rivales distintos</small><strong>${summary.uniqueRivals || 0}</strong><span>pilotos coincidentes</span></article>
-    <article class="comparison-stat"><small>Rivales recurrentes</small><strong>${summary.recurrentRivals || 0}</strong><span>coincidiste en más de una carrera</span></article>
+    <article class="comparison-stat"><small>${uiText("Carreras analizadas", "Races analysed")}</small><strong>${summary.races || 0}</strong><span>${uiText("con tu piloto presente", "with your driver present")}</span></article>
+    <article class="comparison-stat"><small>${uiText("Rivales distintos", "Unique rivals")}</small><strong>${summary.uniqueRivals || 0}</strong><span>${uiText("pilotos coincidentes", "matching drivers")}</span></article>
+    <article class="comparison-stat"><small>${uiText("Rivales recurrentes", "Recurring rivals")}</small><strong>${summary.recurrentRivals || 0}</strong><span>${uiText("coincidiste en más de una carrera", "shared more than one race")}</span></article>
   `;
   const progressBody = document.querySelector("#raceProgressBody");
   const ownerRaces = raceAnalysis.races.filter((race) => race.ownerResult);
@@ -2027,7 +2108,7 @@ function renderMiniPeriodComparison(league) {
     const currentValue = Number(value || 0);
     const previousValue = Number(oldValue || 0);
     const difference = currentValue - previousValue;
-    const format = (number) => number.toLocaleString("es-ES", {
+    const format = (number) => number.toLocaleString(window.GridScopeI18n?.locale() || "es-ES", {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     });
@@ -2035,31 +2116,31 @@ function renderMiniPeriodComparison(league) {
       ? unit[Math.abs(difference) === 1 ? 0 : 1]
       : unit;
     const change = Math.abs(difference) < 10 ** -(decimals + 1)
-      ? "Sin cambios"
-      : `${format(Math.abs(difference))}${suffix}${unitLabel ? ` ${unitLabel}` : ""} ${difference > 0 ? "más" : "menos"}`;
+      ? uiText("Sin cambios", "No change")
+      : `${format(Math.abs(difference))}${suffix}${unitLabel ? ` ${unitLabel}` : ""} ${difference > 0 ? uiText("más", "more") : uiText("menos", "less")}`;
     return `
       <span>
-        <small>${escapeHtml(label)} · seleccionado / anterior</small>
-        <strong>${format(currentValue)}${suffix} <i>frente a</i> ${format(previousValue)}${suffix}</strong>
+        <small>${escapeHtml(label)} · ${uiText("seleccionado / anterior", "selected / previous")}</small>
+        <strong>${format(currentValue)}${suffix} <i>${uiText("frente a", "vs")}</i> ${format(previousValue)}${suffix}</strong>
         <em>${change}</em>
       </span>`;
   };
   container.hidden = false;
   container.innerHTML = `
     <div>
-      <small>Comparación con el periodo puntuable anterior</small>
-      <strong>${escapeHtml(league.label)} frente a ${escapeHtml(previous.label)}</strong>
-      <em>Primero aparece el periodo seleccionado y después el anterior.</em>
+      <small>${uiText("Comparación con el periodo puntuable anterior", "Comparison with the previous scoring period")}</small>
+      <strong>${escapeHtml(localizedChampionshipLabel(league.label))} ${uiText("frente a", "vs")} ${escapeHtml(localizedChampionshipLabel(previous.label))}</strong>
+      <em>${uiText("Primero aparece el periodo seleccionado y después el anterior.", "The selected period is shown first, followed by the previous one.")}</em>
     </div>
-    ${comparisonMetric("Carreras", current.races, prior.races, { unit: ["carrera", "carreras"] })}
-    ${comparisonMetric("Participantes", current.participants, prior.participants, { unit: ["participante", "participantes"] })}
-    ${comparisonMetric("Recurrentes", current.recurrentRivals, prior.recurrentRivals, { unit: ["rival", "rivales"] })}
+    ${comparisonMetric(uiText("Carreras", "Races"), current.races, prior.races, { unit: [uiText("carrera", "race"), uiText("carreras", "races")] })}
+    ${comparisonMetric(uiText("Participantes", "Participants"), current.participants, prior.participants, { unit: [uiText("participante", "participant"), uiText("participantes", "participants")] })}
+    ${comparisonMetric(uiText("Recurrentes", "Recurring rivals"), current.recurrentRivals, prior.recurrentRivals, { unit: [uiText("rival", "rival"), uiText("rivales", "rivals")] })}
     ${isAssetto
-      ? comparisonMetric("GridScore medio", averageGridScore(league), averageGridScore(previous), { decimals: 2, unit: ["punto", "puntos"] })
+      ? comparisonMetric(uiText("GridScore medio", "Average GridScore"), averageGridScore(league), averageGridScore(previous), { decimals: 2, unit: [uiText("punto", "point"), uiText("puntos", "points")] })
       : isRaceRoom
-        ? comparisonMetric("Rating medio", averageOfficialRating(league), averageOfficialRating(previous), { decimals: 2, unit: ["punto", "puntos"] })
-        : comparisonMetric("SoF medio", current.averageSof, prior.averageSof, { unit: ["punto", "puntos"] })}
-    ${comparisonMetric(isAssetto || isRaceRoom ? "Incidentes medios" : "Inc. media", current.averageIncidents, prior.averageIncidents, { decimals: 2, suffix: "x" })}
+        ? comparisonMetric(uiText("Rating medio", "Average Rating"), averageOfficialRating(league), averageOfficialRating(previous), { decimals: 2, unit: [uiText("punto", "point"), uiText("puntos", "points")] })
+        : comparisonMetric(uiText("SoF medio", "Average SoF"), current.averageSof, prior.averageSof, { unit: [uiText("punto", "point"), uiText("puntos", "points")] })}
+    ${comparisonMetric(isAssetto || isRaceRoom ? uiText("Incidentes medios", "Average incidents") : uiText("Inc. media", "Avg. inc."), current.averageIncidents, prior.averageIncidents, { decimals: 2, suffix: "x" })}
   `;
 }
 
@@ -2073,8 +2154,8 @@ function renderMiniLeagues() {
   ratingSortButton.dataset.miniSort = isAssetto ? "gridScore" : "iratingEnd";
   ratingSortButton.innerHTML = `${isAssetto ? "GridScore" : isRaceRoom ? "Rating" : "iRating"}<span class="sort-indicator">↕</span>`;
   safetySortButton.dataset.miniSort = isAssetto ? "cleanlinessScore" : "safetyRatingEnd";
-  safetySortButton.innerHTML = `${isAssetto ? "Limpieza" : isRaceRoom ? "Reputation" : "SR"}<span class="sort-indicator">↕</span>`;
-  incidentsSortButton.innerHTML = `Inc./carrera<span class="sort-indicator">↕</span>`;
+  safetySortButton.innerHTML = `${isAssetto ? uiText("Limpieza", "Cleanliness") : isRaceRoom ? "Reputation" : "SR"}<span class="sort-indicator">↕</span>`;
+  incidentsSortButton.innerHTML = `${uiText("Inc./carrera", "Inc./race")}<span class="sort-indicator">↕</span>`;
   document.querySelector("#miniGridScoreColumn").hidden = isAssetto;
   document.querySelector("#miniCleanlinessColumn").hidden = isAssetto;
   if (isAssetto && miniLeagueSort.key === "iratingEnd") miniLeagueSort.key = "gridScore";
@@ -2082,10 +2163,10 @@ function renderMiniLeagues() {
   if (!isAssetto && miniLeagueSort.key === "gridScore") miniLeagueSort.key = "iratingEnd";
   if (!isAssetto && miniLeagueSort.key === "cleanlinessScore") miniLeagueSort.key = "safetyRatingEnd";
   const scopes = [
-    ["yearly", "Anual", "Clasificación por año"],
-    ["season", isRaceRoom ? "Campeonato" : "Temporada", isRaceRoom ? "Clasificación por serie ranked y año" : "Clasificación por season"],
-    ["monthly", "Mensual", "Clasificación por mes"],
-    ["eternal", "Eterna", "Todo el historial"]
+    ["yearly", uiText("Anual", "Yearly"), uiText("Clasificación por año", "Standings by year")],
+    ["season", isRaceRoom ? uiText("Campeonato", "Championship") : uiText("Temporada", "Season"), isRaceRoom ? uiText("Clasificación por serie ranked y año", "Standings by ranked series and year") : uiText("Clasificación por season", "Standings by season")],
+    ["monthly", uiText("Mensual", "Monthly"), uiText("Clasificación por mes", "Standings by month")],
+    ["eternal", uiText("Eterna", "All-time"), uiText("Todo el historial", "All history")]
   ];
   const customChampionships = miniLeagueAnalysis.customChampionships || [];
   const customSection = document.querySelector("#customChampionshipsSection");
@@ -2095,16 +2176,16 @@ function renderMiniLeagues() {
     const league = championship.league || { summary: {} };
     const details = [
       championship.seriesNames?.length
-        ? `${championship.seriesNames.length} serie${championship.seriesNames.length === 1 ? "" : "s"}`
-        : "Todas las series",
+        ? `${championship.seriesNames.length} ${championship.seriesNames.length === 1 ? uiText("serie", "series") : uiText("series", "series")}`
+        : uiText("Todas las series", "All series"),
       championship.startDate || championship.endDate
-        ? `${championship.startDate || "Inicio"} → ${championship.endDate || "Hoy"}`
-        : "Todo el historial",
+        ? `${championship.startDate || uiText("Inicio", "Start")} → ${championship.endDate || uiText("Hoy", "Today")}`
+        : uiText("Todo el historial", "All history"),
       championship.participantMode === "selected"
-        ? `${championship.driverIds.length}${championship.includeOwner ? " + tú" : ""} seleccionados`
+        ? `${championship.driverIds.length}${championship.includeOwner ? uiText(" + tú", " + you") : ""} ${uiText("seleccionados", "selected")}`
         : championship.participantMode === "all"
-          ? "Todos los coincidentes"
-          : "Rivales recurrentes"
+          ? uiText("Todos los coincidentes", "All matching drivers")
+          : uiText("Rivales recurrentes", "Recurring rivals")
     ];
     return `
       <button class="custom-championship-card ${activeMiniLeagueScope === `custom:${championship.id}` ? "active" : ""}" type="button" data-custom-championship="${championship.id}">
@@ -2119,10 +2200,10 @@ function renderMiniLeagues() {
       : scopes.find(([scope]) => miniLeaguePeriodsFor(scope).length)?.[0] || "eternal";
   }
   document.querySelector("#miniLeagueTabs").innerHTML = scopes.map(([scope, title, description]) => {
-    const league = selectedMiniLeague(scope) || { label: "Sin datos", summary: {} };
+    const league = selectedMiniLeague(scope) || { label: uiText("Sin datos", "No data"), summary: {} };
     return `
       <button class="mini-league-tab ${scope === activeMiniLeagueScope ? "active" : ""}" type="button" data-mini-scope="${scope}">
-        <span><small>${title}</small><strong>${escapeHtml(league.label)}</strong><em>${description}</em></span>
+        <span><small>${title}</small><strong>${escapeHtml(localizedChampionshipLabel(league.label))}</strong><em>${description}</em></span>
         <b>${league.summary?.participants || 0}</b>
       </button>`;
   }).join("");
@@ -2140,13 +2221,13 @@ function renderMiniLeagues() {
   periodToolbar.hidden = isCustom || activeMiniLeagueScope === "eternal" || periods.length < 2;
   periodSelect.innerHTML = periods.map((period) => {
     const raceCount = Number(period.summary?.races || 0);
-    const raceLabel = `${raceCount} ${raceCount === 1 ? "carrera" : "carreras"}`;
-    return `<option value="${escapeHtml(period.periodKey || activeMiniLeagueScope)}" ${(period.periodKey || activeMiniLeagueScope) === activeMiniLeaguePeriods[activeMiniLeagueScope] ? "selected" : ""}>${escapeHtml(period.label)} · ${raceLabel}</option>`;
+    const raceLabel = `${raceCount} ${raceCount === 1 ? uiText("carrera", "race") : uiText("carreras", "races")}`;
+    return `<option value="${escapeHtml(period.periodKey || activeMiniLeagueScope)}" ${(period.periodKey || activeMiniLeagueScope) === activeMiniLeaguePeriods[activeMiniLeagueScope] ? "selected" : ""}>${escapeHtml(localizedChampionshipLabel(period.label))} · ${raceLabel}</option>`;
   }).join("");
   const summary = league.summary || {};
   const classification = miniLeagueClassification(league);
-  document.querySelector("#miniLeagueRankingTabCount").textContent = `${league.participants.length} piloto${league.participants.length === 1 ? "" : "s"}`;
-  document.querySelector("#miniLeagueRacesTabCount").textContent = `${league.events.length} carrera${league.events.length === 1 ? "" : "s"}`;
+  document.querySelector("#miniLeagueRankingTabCount").textContent = `${league.participants.length} ${league.participants.length === 1 ? uiText("piloto", "driver") : uiText("pilotos", "drivers")}`;
+  document.querySelector("#miniLeagueRacesTabCount").textContent = `${league.events.length} ${league.events.length === 1 ? uiText("carrera", "race") : uiText("carreras", "races")}`;
   const ownerParticipant = league.participants.find((participant) => participant.isOwner);
   const ownerOfficialPosition = ownerParticipant
     ? classification.positions.get(String(ownerParticipant.iracingId))
@@ -2173,30 +2254,30 @@ function renderMiniLeagues() {
   document.querySelector("#miniLeagueMinimumRaces").value = miniLeagueMinimumRaces;
   document.querySelector("#miniLeagueMinimumRaces").disabled = isCustom;
   document.querySelector("#miniLeagueMinimumHelp").textContent =
-    `${classification.classified.length} de ${league.participants.length} pilotos clasificados; el resto sigue visible como provisional.`;
+    uiText(`${classification.classified.length} de ${league.participants.length} pilotos clasificados; el resto sigue visible como provisional.`, `${classification.classified.length} of ${league.participants.length} drivers classified; the rest remain visible as provisional.`);
   const weightingExplanation = league.rankingMode === "weekly"
-    ? "Primero se calcula la media de cada semana y después la media general, de modo que todas las semanas pesan lo mismo."
-    : "Cada carrera puntuable pesa lo mismo en la media general.";
+    ? uiText("Primero se calcula la media de cada semana y después la media general, de modo que todas las semanas pesan lo mismo.", "Each week's average is calculated first, followed by the overall average, so every week has the same weight.")
+    : uiText("Cada carrera puntuable pesa lo mismo en la media general.", "Every scoring race has the same weight in the overall average.");
   const platformCalculationNote = isAssetto
-    ? " Los resultados proceden del historial JSON de Content Manager; GridScore y Limpieza son métricas propias de GridScope."
+    ? uiText(" Los resultados proceden del historial JSON de Content Manager; GridScore y Limpieza son métricas propias de GridScope.", " Results come from Content Manager's JSON history; GridScore and Cleanliness are GridScope metrics.")
     : isRaceRoom
-      ? " Rating, Reputation e Incident Points proceden de RaceRoom. GridScore y Limpieza son métricas independientes de GridScope; RaceRoom no aporta iRating, Safety Rating ni SoF."
-      : " iRating, Safety Rating y SoF conservan los valores oficiales incluidos en los resultados de iRacing.";
-  document.querySelector("#miniLeagueCalculationHelp").textContent = `${isCustom ? "Este campeonato utiliza únicamente las series, fechas y pilotos configurados. " : ""}Una carrera puntúa cuando coinciden al menos dos miembros. El mejor clasificado entre ellos recibe 100 puntos, el último 0 y el resto una cantidad proporcional. ${weightingExplanation} Cada pareja de miembros genera además un duelo.${platformCalculationNote}`;
-  document.querySelector("#miniLeaguePeriod").textContent = league.label;
+      ? uiText(" Rating, Reputation e Incident Points proceden de RaceRoom. GridScore y Limpieza son métricas independientes de GridScope; RaceRoom no aporta iRating, Safety Rating ni SoF.", " Rating, Reputation and Incident Points come from RaceRoom. GridScore and Cleanliness are independent GridScope metrics; RaceRoom does not provide iRating, Safety Rating or SoF.")
+      : uiText(" iRating, Safety Rating y SoF conservan los valores oficiales incluidos en los resultados de iRacing.", " iRating, Safety Rating and SoF retain the official values included in iRacing results.");
+  document.querySelector("#miniLeagueCalculationHelp").textContent = `${isCustom ? uiText("Este campeonato utiliza únicamente las series, fechas y pilotos configurados. ", "This championship only uses the configured series, dates and drivers. ") : ""}${uiText("Una carrera puntúa cuando coinciden al menos dos miembros. El mejor clasificado entre ellos recibe 100 puntos, el último 0 y el resto una cantidad proporcional.", "A race scores when at least two members take part. The highest-placed member receives 100 points, the last receives 0, and the rest receive a proportional score.")} ${weightingExplanation} ${uiText("Cada pareja de miembros genera además un duelo.", "Each pair of members also creates a head-to-head duel.")}${platformCalculationNote}`;
+  document.querySelector("#miniLeaguePeriod").textContent = localizedChampionshipLabel(league.label);
   document.querySelector("#miniLeagueRankingTitle").textContent =
-    isCustom ? "Clasificación del campeonato" : "Clasificación de recurrentes";
+    isCustom ? uiText("Clasificación del campeonato", "Championship standings") : uiText("Clasificación de recurrentes", "Recurring rivals standings");
   document.querySelector("#miniLeagueSummary").innerHTML = `
-    <article><small>Carreras puntuables</small><strong>${summary.races || 0}</strong><span>con miembros coincidentes</span></article>
-    <article><small>Participantes</small><strong>${summary.participants || 0}</strong><span>${classification.classified.length} cumplen el mínimo</span></article>
-    <article><small>${isCustom ? "Rivales incluidos" : "Rivales recurrentes"}</small><strong>${summary.recurrentRivals || 0}</strong><span>${isCustom ? "según la configuración" : "mínimo dos coincidencias"}</span></article>
-    <article><small>Series combinadas</small><strong>${summary.series || 0}</strong><span>${isAssetto ? "campeonatos o servidores distintos" : isRaceRoom ? "campeonatos ranked distintos" : "campeonatos oficiales distintos"}</span></article>
-    <article><small>Circuitos</small><strong>${summary.tracks || 0}</strong><span>configuraciones diferentes</span></article>
-    <article><small>Duelos disputados</small><strong>${formatInteger(summary.duels || 0)}</strong><span>comparaciones entre miembros</span></article>
-    <article><small>Miembros por carrera</small><strong>${formatDecimal(summary.averageMembers || 0)}</strong><span>participación media puntuable</span></article>
-    <article><small>${isAssetto ? "GridScore medio" : isRaceRoom ? "Rating medio" : "SoF medio"}</small><strong>${isAssetto ? averageGridScore == null ? "—" : formatDecimal(averageGridScore) : isRaceRoom ? averageOfficialRating == null ? "—" : formatDecimal(averageOfficialRating) : summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>${isAssetto ? "media de los miembros valorados" : isRaceRoom ? "media del Rating final disponible" : "nivel de las parrillas"}</span></article>
-    <article><small>Incidentes medios</small><strong>${formatDecimal(summary.averageIncidents || 0)}x</strong><span>por miembro y carrera</span></article>
-    <article><small>Referencia</small><strong>${ownerOfficialPosition ? `P${ownerOfficialPosition}` : "Provisional"}</strong><span>${leader ? `líder: ${escapeHtml(leader.name)}` : "sin pilotos clasificados"}</span></article>
+    <article><small>${uiText("Carreras puntuables", "Scoring races")}</small><strong>${summary.races || 0}</strong><span>${uiText("con miembros coincidentes", "with matching members")}</span></article>
+    <article><small>${uiText("Participantes", "Participants")}</small><strong>${summary.participants || 0}</strong><span>${classification.classified.length} ${uiText("cumplen el mínimo", "meet the minimum")}</span></article>
+    <article><small>${isCustom ? uiText("Rivales incluidos", "Included rivals") : uiText("Rivales recurrentes", "Recurring rivals")}</small><strong>${summary.recurrentRivals || 0}</strong><span>${isCustom ? uiText("según la configuración", "as configured") : uiText("mínimo dos coincidencias", "at least two shared races")}</span></article>
+    <article><small>${uiText("Series combinadas", "Combined series")}</small><strong>${summary.series || 0}</strong><span>${isAssetto ? uiText("campeonatos o servidores distintos", "different championships or servers") : isRaceRoom ? uiText("campeonatos ranked distintos", "different ranked championships") : uiText("campeonatos oficiales distintos", "different official championships")}</span></article>
+    <article><small>${uiText("Circuitos", "Circuits")}</small><strong>${summary.tracks || 0}</strong><span>${uiText("configuraciones diferentes", "different configurations")}</span></article>
+    <article><small>${uiText("Duelos disputados", "Head-to-head duels")}</small><strong>${formatInteger(summary.duels || 0)}</strong><span>${uiText("comparaciones entre miembros", "comparisons between members")}</span></article>
+    <article><small>${uiText("Miembros por carrera", "Members per race")}</small><strong>${formatDecimal(summary.averageMembers || 0)}</strong><span>${uiText("participación media puntuable", "average scoring participation")}</span></article>
+    <article><small>${isAssetto ? uiText("GridScore medio", "Average GridScore") : isRaceRoom ? uiText("Rating medio", "Average Rating") : uiText("SoF medio", "Average SoF")}</small><strong>${isAssetto ? averageGridScore == null ? "—" : formatDecimal(averageGridScore) : isRaceRoom ? averageOfficialRating == null ? "—" : formatDecimal(averageOfficialRating) : summary.averageSof ? formatInteger(summary.averageSof) : "—"}</strong><span>${isAssetto ? uiText("media de los miembros valorados", "average of rated members") : isRaceRoom ? uiText("media del Rating final disponible", "average available final Rating") : uiText("nivel de las parrillas", "field strength")}</span></article>
+    <article><small>${uiText("Incidentes medios", "Average incidents")}</small><strong>${formatDecimal(summary.averageIncidents || 0)}x</strong><span>${uiText("por miembro y carrera", "per member and race")}</span></article>
+    <article><small>${uiText("Referencia", "Reference")}</small><strong>${ownerOfficialPosition ? `P${ownerOfficialPosition}` : uiText("Provisional", "Provisional")}</strong><span>${leader ? `${uiText("líder", "leader")}: ${escapeHtml(leader.name)}` : uiText("sin pilotos clasificados", "no classified drivers")}</span></article>
   `;
   renderMiniPeriodComparison(league);
   const body = document.querySelector("#miniLeagueBody");
@@ -2265,28 +2346,28 @@ function renderMiniLeagues() {
       return `
       <tr class="${classified ? "" : "mini-provisional"} ${participant.isOwner ? "mini-owner-row" : ""} ${pinned ? "mini-owner-pinned-row" : ""}" data-mini-driver-id="${participant.iracingId}" tabindex="0">
         <td><span class="position ${classified && officialPosition <= 3 ? "medal" : ""}">${displayedPosition ?? "—"}</span></td>
-        <td><div class="driver-cell"><i class="avatar ${participant.color}">${escapeHtml(participant.initials)}</i><span><strong>${escapeHtml(participant.name)}${classified ? "" : ' <em class="mini-provisional-badge">Provisional</em>'}</strong><small>${participant.isOwner ? "Piloto de referencia" : escapeHtml(driverIdentityText(participant.iracingId))} · ${participant.races}/${miniLeagueMinimumRaces} carreras mínimas</small></span></div></td>
+        <td><div class="driver-cell"><i class="avatar ${participant.color}">${escapeHtml(participant.initials)}</i><span><strong>${escapeHtml(participant.name)}${classified ? "" : ` <em class="mini-provisional-badge">${uiText("Provisional", "Provisional")}</em>`}</strong><small>${participant.isOwner ? uiText("Piloto de referencia", "Reference driver") : escapeHtml(driverIdentityText(participant.iracingId))} · ${participant.races}/${miniLeagueMinimumRaces} ${uiText("carreras mínimas", "minimum races")}</small></span></div></td>
         <td class="numeric mini-score">${formatDecimal(participant.score)}</td>
         <td class="numeric">${participant.races}</td>
         <td class="numeric"><span class="comparison-win">${participant.wins}</span> / <span class="comparison-loss">${participant.losses}</span></td>
         <td class="numeric">${formatDecimal(participant.duelWinRate)}%</td>
         <td class="numeric">${participant.seriesCount}</td>
         <td class="numeric">${formatDecimal(participant.averageIncidents)}x</td>
-        <td class="numeric">${isAssetto ? participant.gridRating == null ? "—" : `${formatDecimal(participant.gridRating.gridScore)} <small>Variación ${formatSigned(participant.gridRating.gridScoreChange)}</small>` : participant.iratingEnd == null ? "—" : `${formatInteger(participant.iratingEnd)} <small>${formatSigned(participant.iratingChange)}</small>`}</td>
-        <td class="numeric">${isAssetto ? participant.gridRating == null ? "—" : `${formatDecimal(participant.gridRating.cleanlinessScore)} <small>Confianza ${participant.gridRating.confidence}</small>` : participant.safetyRatingEnd == null ? "—" : `${formatDecimal(participant.safetyRatingEnd)} <small>${formatSigned(participant.safetyRatingChange)}</small>`}</td>
+        <td class="numeric">${isAssetto ? participant.gridRating == null ? "—" : `${formatDecimal(participant.gridRating.gridScore)} <small>${uiText("Variación", "Change")} ${formatSigned(participant.gridRating.gridScoreChange)}</small>` : participant.iratingEnd == null ? "—" : `${formatInteger(participant.iratingEnd)} <small>${formatSigned(participant.iratingChange)}</small>`}</td>
+        <td class="numeric">${isAssetto ? participant.gridRating == null ? "—" : `${formatDecimal(participant.gridRating.cleanlinessScore)} <small>${uiText("Confianza", "Confidence")} ${participant.gridRating.confidence}</small>` : participant.safetyRatingEnd == null ? "—" : `${formatDecimal(participant.safetyRatingEnd)} <small>${formatSigned(participant.safetyRatingChange)}</small>`}</td>
         ${isAssetto ? "" : `<td class="numeric">${participant.gridRating == null ? "—" : `${formatDecimal(participant.gridRating.gridScore)} <small>GridScope</small>`}</td>
         <td class="numeric">${participant.gridRating == null ? "—" : `${formatDecimal(participant.gridRating.cleanlinessScore)} <small>${participant.gridRating.confidence}</small>`}</td>`}
-        <td class="numeric">${participant.isOwner ? "Referencia" : `${participant.ownerAhead}-${participant.rivalAhead}`}</td>
-        <td><button class="icon-button small" type="button" aria-label="Ver campeonato de ${escapeHtml(participant.name)}"><svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button></td>
+        <td class="numeric">${participant.isOwner ? uiText("Referencia", "Reference") : `${participant.ownerAhead}-${participant.rivalAhead}`}</td>
+        <td><button class="icon-button small" type="button" aria-label="${uiText("Ver campeonato de", "View championship for")} ${escapeHtml(participant.name)}"><svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg></button></td>
       </tr>`;
     }).join("")
-    : `<tr><td colspan="${isAssetto ? 12 : 14}">${isCustom ? "No hay carreras con al menos dos de los pilotos configurados." : "Todavía no hay suficientes coincidencias recurrentes en este periodo."}</td></tr>`;
+    : `<tr><td colspan="${isAssetto ? 12 : 14}">${isCustom ? uiText("No hay carreras con al menos dos de los pilotos configurados.", "No races include at least two of the configured drivers.") : uiText("Todavía no hay suficientes coincidencias recurrentes en este periodo.", "There are not enough recurring matches in this period yet.")}</td></tr>`;
   const pageStart = sortedParticipants.length
     ? (miniLeaguePage - 1) * MINI_LEAGUE_PAGE_SIZE + 1
     : 0;
   const pageEnd = Math.min(miniLeaguePage * MINI_LEAGUE_PAGE_SIZE, sortedParticipants.length);
-  document.querySelector("#miniLeaguePageSummary").textContent = `${pageStart}–${pageEnd} de ${sortedParticipants.length} pilotos`;
-  document.querySelector("#miniLeaguePageNumber").textContent = `Página ${miniLeaguePage} de ${totalPages}`;
+  document.querySelector("#miniLeaguePageSummary").textContent = uiText(`${pageStart}–${pageEnd} de ${sortedParticipants.length} pilotos`, `${pageStart}–${pageEnd} of ${sortedParticipants.length} drivers`);
+  document.querySelector("#miniLeaguePageNumber").textContent = uiText(`Página ${miniLeaguePage} de ${totalPages}`, `Page ${miniLeaguePage} of ${totalPages}`);
   document.querySelector("#miniLeaguePreviousPage").disabled = miniLeaguePage <= 1;
   document.querySelector("#miniLeagueNextPage").disabled = miniLeaguePage >= totalPages;
   document.querySelector("#miniLeaguePagination").hidden = sortedParticipants.length <= MINI_LEAGUE_PAGE_SIZE;
@@ -2300,14 +2381,14 @@ function renderMiniLeagues() {
     ? visibleEvents.map((race) => `
       <button type="button" data-mini-race-id="${race.eventId}">
         <span class="mini-event-date">${formatRaceDate(race.startTime)}</span>
-        <span class="mini-event-main"><strong>${escapeHtml(race.track)}</strong><small>${escapeHtml(race.seriesName)} · ${escapeHtml(race.layout || "Trazado principal")}</small></span>
-        <span><small>Miembros</small><strong>${race.participants}</strong></span>
-        <span><small>${isAssetto || isRaceRoom ? "Parrilla" : "SoF"}</small><strong>${isAssetto || isRaceRoom ? formatInteger(race.fieldSize || race.participants) : formatInteger(race.strengthOfField)}</strong></span>
+        <span class="mini-event-main"><strong>${escapeHtml(race.track)}</strong><small>${escapeHtml(race.seriesName)} · ${escapeHtml(race.layout || uiText("Trazado principal", "Main layout"))}</small></span>
+        <span><small>${uiText("Miembros", "Members")}</small><strong>${race.participants}</strong></span>
+        <span><small>${isAssetto || isRaceRoom ? uiText("Parrilla", "Grid") : "SoF"}</small><strong>${isAssetto || isRaceRoom ? formatInteger(race.fieldSize || race.participants) : formatInteger(race.strengthOfField)}</strong></span>
         <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
       </button>`).join("")
-    : `<article class="empty-archive"><h3>Sin carreras puntuables</h3><p>${isCustom ? "Revisa las series, las fechas y los pilotos seleccionados." : "Se necesitan al menos dos coincidencias con un mismo rival."}</p></article>`;
+    : `<article class="empty-archive"><h3>${uiText("Sin carreras puntuables", "No scoring races")}</h3><p>${isCustom ? uiText("Revisa las series, las fechas y los pilotos seleccionados.", "Check the selected series, dates and drivers.") : uiText("Se necesitan al menos dos coincidencias con un mismo rival.", "At least two shared races with the same rival are required.")}</p></article>`;
   document.querySelector("#miniLeagueEventsPagination").innerHTML = paginationMarkup(
-    "miniEvents", listPages.miniEvents, league.events.length, LIST_PAGE_SIZES.miniEvents, "carreras"
+    "miniEvents", listPages.miniEvents, league.events.length, LIST_PAGE_SIZES.miniEvents, uiText("carreras", "races")
   );
   refreshMetricHelp(document.querySelector("#mini-leagues"));
   renderMiniLeagueContentTab();
@@ -2340,7 +2421,7 @@ function renderChampionshipFormChoices(championship = null) {
   document.querySelector("#championshipSeriesList").innerHTML =
     (miniLeagueAnalysis.options?.series || []).map((seriesName) => `
       <label><input type="checkbox" name="championshipSeries" value="${escapeHtml(seriesName)}" ${selectedSeries.has(seriesName) ? "checked" : ""}><span title="${escapeHtml(seriesName)}">${escapeHtml(seriesName)}</span></label>
-    `).join("") || '<p class="dialog-help">Todavía no hay series importadas en este simulador.</p>';
+    `).join("") || `<p class="dialog-help">${uiText("Todavía no hay series importadas en este simulador.", "No series have been imported for this simulator yet.")}</p>`;
   updateChampionshipSeriesCount();
   renderChampionshipDriverChoices();
 }
@@ -2350,13 +2431,13 @@ function updateChampionshipSeriesCount() {
   const selectedSeries = document.querySelectorAll('[name="championshipSeries"]:checked');
   const counter = document.querySelector("#championshipSeriesCount");
   if (!allSeries.length) {
-    counter.textContent = "Sin series disponibles";
+    counter.textContent = uiText("Sin series disponibles", "No series available");
   } else if (!selectedSeries.length) {
-    counter.textContent = `Todas por defecto · ${allSeries.length}`;
+    counter.textContent = uiText(`Todas por defecto · ${allSeries.length}`, `All by default · ${allSeries.length}`);
   } else if (selectedSeries.length === allSeries.length) {
-    counter.textContent = `Todas seleccionadas · ${allSeries.length}`;
+    counter.textContent = uiText(`Todas seleccionadas · ${allSeries.length}`, `All selected · ${allSeries.length}`);
   } else {
-    counter.textContent = `${selectedSeries.length} de ${allSeries.length}`;
+    counter.textContent = uiText(`${selectedSeries.length} de ${allSeries.length}`, `${selectedSeries.length} of ${allSeries.length}`);
   }
 }
 
@@ -2381,13 +2462,13 @@ function renderChampionshipDriverChoices(query = "") {
     visibleDrivers.map((driver) => `
       <label data-championship-driver-name="${escapeHtml(driver.name.toLocaleLowerCase("es"))}">
         <input type="checkbox" name="championshipDriver" value="${escapeHtml(driver.iracingId)}" ${championshipSelectedDriverIds.has(String(driver.iracingId)) ? "checked" : ""}>
-        <span title="${escapeHtml(driver.name)}">${escapeHtml(driver.name)}${driver.isOwner ? " · Referencia" : ""}</span>
+        <span title="${escapeHtml(driver.name)}">${escapeHtml(driver.name)}${driver.isOwner ? ` · ${uiText("Referencia", "Reference")}` : ""}</span>
       </label>
-    `).join("") || '<p class="dialog-help">No hay pilotos que coincidan con esta búsqueda.</p>';
+    `).join("") || `<p class="dialog-help">${uiText("No hay pilotos que coincidan con esta búsqueda.", "No drivers match this search.")}</p>`;
   if (matchingDrivers.length > visibleDrivers.length) {
     document.querySelector("#championshipDriverList").insertAdjacentHTML(
       "beforeend",
-      `<p class="driver-choice-limit">Mostrando los primeros 250 de ${formatInteger(matchingDrivers.length)}. Escribe parte del nombre para concretar.</p>`
+      `<p class="driver-choice-limit">${uiText(`Mostrando los primeros 250 de ${formatInteger(matchingDrivers.length)}. Escribe parte del nombre para concretar.`, `Showing the first 250 of ${formatInteger(matchingDrivers.length)}. Enter part of a name to narrow the results.`)}</p>`
     );
   }
 }
@@ -2404,7 +2485,7 @@ function openChampionshipEditor(championshipId = null) {
   document.querySelector("#championshipForm").reset();
   document.querySelector("#championshipId").value = championship?.id || "";
   document.querySelector("#championshipDialogTitle").textContent =
-    championship ? "Editar campeonato" : "Crear campeonato";
+    championship ? uiText("Editar campeonato", "Edit championship") : uiText("Crear campeonato", "Create championship");
   document.querySelector("#championshipName").value = championship?.name || "";
   document.querySelector("#championshipStartDate").value = championship?.startDate || "";
   document.querySelector("#championshipEndDate").value = championship?.endDate || "";
@@ -3615,6 +3696,7 @@ function renderGlobalOverview() {
   }
   const seasonCard = (season) => `
     <button class="season-overview-card ${season.selected ? "selected" : ""}" type="button" data-overview-league="${season.id}" style="--season-accent:${seriesTheme(season.seriesName).hex}">
+      <img class="season-card-logo" src="${seriesLogoUrl("", season.seriesName)}" alt="" loading="lazy">
       <div class="season-card-head">
         <span class="season-status ${season.isCurrent ? "current" : "historical"}">${season.isCurrent ? "ACTUAL" : "HISTÓRICA"}</span>
         ${season.selected ? '<span class="season-selected">SELECCIONADA</span>' : ""}
@@ -3665,7 +3747,7 @@ function renderGlobalOverview() {
     return `
       <details class="archive-series-group" data-context-key="${escapeHtml(`archive-series:${seriesName}`)}" ${selectedSeries || (!globalAnalysis.seasons.some((season) => season.selected) && seriesIndex === 0) ? "open" : ""}>
         <summary>
-          <span class="archive-series-icon" style="--archive-accent:${seriesTheme(seriesName).hex}">${seriesInitials(seriesName)}</span>
+          <span class="archive-series-icon" style="--archive-accent:${seriesTheme(seriesName).hex}"><img src="${seriesLogoUrl("", seriesName)}" alt="" loading="lazy"></span>
           <span class="archive-series-copy">
             <strong>${escapeHtml(seriesName)}</strong>
             <small>${seasons.length} temporada${seasons.length === 1 ? "" : "s"} · ${years.length} año${years.length === 1 ? "" : "s"} · ${totalRaces} carreras</small>
@@ -3874,6 +3956,7 @@ function renderTelemetrySettings() {
 
 function renderAll() {
   renderLeagueContext();
+  renderViewVisualBanners();
   renderRanking();
   renderRounds();
   renderSeriesExplorer();
@@ -3925,7 +4008,10 @@ function restoreInterfaceContext(context) {
 async function loadState({ quiet = false, preserveContext = false, showActivity = !preserveContext } = {}) {
   const interfaceContext = preserveContext ? captureInterfaceContext() : null;
   const activity = showActivity
-    ? beginActivity("Actualizando estadísticas…", "Leyendo carreras, pilotos, comparativas y campeonatos de la base local.")
+    ? beginActivity(
+        uiText("Actualizando estadísticas…", "Updating statistics…"),
+        uiText("Leyendo carreras, pilotos, comparativas y campeonatos de la base local.", "Loading races, drivers, comparisons and championships from the local database.")
+      )
     : null;
   try {
     appState = await apiRequest("/api/state");
@@ -3942,18 +4028,18 @@ async function loadState({ quiet = false, preserveContext = false, showActivity 
         body: JSON.stringify({ language: currentLanguage })
       }).catch(() => {});
     }
-    document.querySelector("#backendStatus").textContent = "Base local activa";
-    document.querySelector("#backendDetail").textContent = "SQLite · Solo este ordenador";
+    document.querySelector("#backendStatus").textContent = uiText("Base local activa", "Local database active");
+    document.querySelector("#backendDetail").textContent = uiText("SQLite · Solo este ordenador", "SQLite · This computer only");
     renderAll();
     window.GridScopeI18n?.apply(document);
     await loadRaceAnalytics();
     restoreInterfaceContext(interfaceContext);
-    if (!quiet) showToast("Datos actualizados", "La información se ha leído desde la base de datos local.");
+    if (!quiet) showToast(uiText("Datos actualizados", "Data updated"), uiText("La información se ha leído desde la base de datos local.", "The information has been loaded from the local database."));
   } catch (error) {
     restoreInterfaceContext(interfaceContext);
-    document.querySelector("#backendStatus").textContent = "Servidor no disponible";
-    document.querySelector("#backendDetail").textContent = "Usa abrir-aplicacion.ps1";
-    if (!quiet) showToast("No se puede conectar", error.message);
+    document.querySelector("#backendStatus").textContent = uiText("Servidor no disponible", "Server unavailable");
+    document.querySelector("#backendDetail").textContent = uiText("Usa abrir-aplicacion.ps1", "Use abrir-aplicacion.ps1");
+    if (!quiet) showToast(uiText("No se puede conectar", "Unable to connect"), error.message);
   } finally {
     if (activity != null) endActivity(activity);
   }
@@ -3962,7 +4048,7 @@ async function loadState({ quiet = false, preserveContext = false, showActivity 
 function switchView(viewId) {
   views.forEach((view) => view.classList.toggle("active", view.id === viewId));
   navButtons.forEach((button) => button.classList.toggle("active", button.dataset.view === viewId));
-  pageTitle.textContent = pageTitles[viewId] || "GridScope";
+  pageTitle.textContent = (window.GridScopeI18n?.getLanguage() === "en" ? englishPageTitles[viewId] : pageTitles[viewId]) || "GridScope";
   localStorage.setItem("apex-active-view", viewId);
   closeMobileMenu();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -4099,7 +4185,7 @@ document.querySelector("#comparisonCharts").addEventListener("keydown", (event) 
 
 document.querySelector("#refreshButton").addEventListener("click", async () => {
   const button = document.querySelector("#refreshButton");
-  setButtonBusy(button, true, "Actualizando…");
+  setButtonBusy(button, true, uiText("Actualizando…", "Refreshing…"));
   try {
     await loadState();
   } finally {

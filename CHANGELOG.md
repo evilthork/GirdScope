@@ -2,6 +2,17 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.10.1] - 2026-10-31
+
+- Se completan las traducciones dinámicas en Comparativas, Campeonatos y el
+  proceso de actualización de estadísticas.
+- Los números, fechas, periodos y mensajes generados respetan el idioma activo.
+- Pilotos, Comparativas, Campeonatos y Archivo global incorporan una franja
+  visual compacta con el circuito y la serie activos.
+- El Archivo global muestra logos de las series en sus grupos y temporadas.
+- Se mejora la legibilidad de las gráficas eliminando brillos y contornos
+  duplicados en sus etiquetas.
+
 ## [0.10.0] - 2026-10-31
 
 - Se incorpora un selector de apariencia persistente con los temas GridScope,
