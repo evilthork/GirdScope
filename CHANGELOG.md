@@ -2,6 +2,15 @@
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.10.2] - 2026-10-31
+
+- La clasificación general traduce sus avisos, estados provisionales y tarjetas
+  de resumen según el idioma seleccionado.
+- El detalle de carrera queda traducido en sus métricas, tabla, telemetría,
+  clima, posiciones multiclase y distintivos de pilotos.
+- Las ayudas y desgloses de GridScore y Limpieza mostrados en los resultados
+  incorporan sus textos en inglés.
+
 ## [0.10.1] - 2026-10-31
 
 - Se completan las traducciones dinámicas en Comparativas, Campeonatos y el

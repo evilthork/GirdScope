@@ -902,10 +902,15 @@ function trackMapUrl(trackId, trackName, layout = "") {
 }
 
 function metricHelp(label, explanation) {
-  return `${escapeHtml(label)}<button class="metric-help" type="button" data-tooltip="${escapeHtml(explanation)}" aria-label="Explicación de ${escapeHtml(label)}">?</button>`;
+  return `${escapeHtml(label)}<button class="metric-help" type="button" data-tooltip="${escapeHtml(explanation)}" aria-label="${uiText("Explicación de", "Explanation of")} ${escapeHtml(label)}">?</button>`;
 }
 
 function gridScoreFormulaExplanation(platform = appState.settings?.platform || appState.league?.platform) {
+  if (window.GridScopeI18n?.getLanguage() === "en") {
+    if (platform === "assetto-corsa") return "GridScore = Performance × 75% + Cleanliness × 25%. Performance combines finishing result, positions gained or lost, best-lap percentile, lap consistency, race completion and results against recurring rivals. Missing components are excluded and the available weights are adjusted proportionally.";
+    if (platform === "raceroom") return "GridScore is a GridScope metric from 0 to 100: Performance × 75% + Cleanliness × 25%. It uses relative finishing position, positions gained, best lap when available, distance completed and head-to-head results against recurring rivals. It does not modify the official RaceRoom Rating or Reputation.";
+    return "GridScore = Performance × 75% + Cleanliness × 25%. Performance combines relative finishing position, positions gained or lost, best-lap percentile, race completion, results against recurring rivals and SoF difficulty. Missing components are excluded and the available weights are adjusted proportionally. It does not modify iRating or Safety Rating.";
+  }
   return platform === "assetto-corsa"
     ? "GridScore = Rendimiento × 75% + Limpieza × 25%. Rendimiento combina: resultado dentro de la parrilla 40%, posiciones ganadas o perdidas 15%, percentil de mejor vuelta 15%, regularidad de las vueltas 10%, porcentaje de carrera completada 10% y porcentaje de rivales recurrentes superados 10%. Si el JSON no contiene un componente, se excluye y los pesos disponibles se reajustan proporcionalmente."
     : platform === "raceroom"
@@ -918,6 +923,11 @@ function gridRatingExplanation(platform = appState.settings?.platform || appStat
 }
 
 function cleanlinessFormulaExplanation(platform = appState.settings?.platform || appState.league?.platform) {
+  if (window.GridScopeI18n?.getLanguage() === "en") {
+    if (platform === "assetto-corsa") return "The incident counter is normalized to a 30-minute race. Cleanliness ranges from 0 to 100; a lower incident rate produces a higher score. Content Manager provides the counter, but its history cannot reliably separate every incident type.";
+    if (platform === "raceroom") return "Cleanliness is a GridScope metric from 0 to 100 based on the Incident Points and distance published by RaceRoom. It normalizes incidents so races of different lengths can be compared. It is independent from the official Reputation value.";
+    return "When corner counts are available, incidents are normalized per 1,000 corners. Otherwise, they are normalized per 30 minutes. Cleanliness ranges from 0 to 100 and does not replace Safety Rating.";
+  }
   return platform === "assetto-corsa"
     ? "Primero se normaliza el contador de incidentes a una carrera equivalente de 30 minutos: incidentes ÷ minutos conducidos × 30. Después: Limpieza = máximo entre 0 y 100 − (incidentes por 30 minutos × 12,5). Ejemplos: 0 incidentes/30 min = 100 puntos; 4 = 50; 8 o más = 0. Content Manager proporciona el contador, pero el historial no permite asegurar que todos sus valores sean exclusivamente salidas de pista."
     : platform === "raceroom"
@@ -942,6 +952,11 @@ function duelExplanation() {
 }
 
 function fieldContactExplanation(platform = appState.settings?.platform || appState.league?.platform, period = "el periodo indicado") {
+  if (window.GridScopeI18n?.getLanguage() === "en") {
+    if (platform === "assetto-corsa") return "Total incident counter saved by Content Manager for every driver in the valid races of the selected period. This is a whole-grid total, not only the reference driver's value, and the history cannot reliably separate each incident type.";
+    if (platform === "raceroom") return "Total Incident Points published by RaceRoom for every driver in the valid races of the selected period. This is a whole-grid total, not only the reference driver's value.";
+    return "Total incident points recorded by iRacing for every driver in the valid races of the selected period. This is a whole-grid total, not only the reference driver's value.";
+  }
   return platform === "assetto-corsa"
     ? `Suma del contador de incidentes guardado por Content Manager para todos los pilotos de todas las carreras válidas de ${period}. Es un total de parrilla y no representa únicamente al piloto de referencia. El historial no permite separar con certeza cada tipo de incidente.`
     : platform === "raceroom"
@@ -962,34 +977,37 @@ function gridScoreMarkup(result) {
   const components = result.scoreComponents || {};
   const isAssetto = (appState.settings?.platform || appState.league?.platform) === "assetto-corsa";
   const definitions = {
-    finish: ["Resultado", isAssetto ? 40 : 35],
-    progress: ["Progreso", 15],
-    pace: ["Ritmo", 15],
-    consistency: ["Regularidad", 10],
-    completion: ["Carrera completada", 10],
-    recurrent: ["Rivales recurrentes", 10],
-    sof: ["Dificultad SoF", 15]
+    finish: [uiText("Resultado", "Result"), isAssetto ? 40 : 35],
+    progress: [uiText("Progreso", "Progress"), 15],
+    pace: [uiText("Ritmo", "Pace"), 15],
+    consistency: [uiText("Regularidad", "Consistency"), 10],
+    completion: [uiText("Carrera completada", "Race completion"), 10],
+    recurrent: [uiText("Rivales recurrentes", "Recurring rivals"), 10],
+    sof: [uiText("Dificultad SoF", "SoF difficulty"), 15]
   };
   const breakdown = Object.entries(definitions)
     .filter(([key]) => components[key] != null)
     .map(([key, [label, weight]]) => `${label} ${formatDecimal(components[key])} × ${weight}%`)
     .join(" · ");
-  const formula = `GridScore ${formatDecimal(result.gridScore)} = Rendimiento ${formatDecimal(result.performanceScore)} × 75% + Limpieza ${formatDecimal(result.cleanlinessScore)} × 25%. El rendimiento es la media ponderada de: ${breakdown}. Los componentes ausentes se excluyen y los pesos restantes se reajustan.`;
-  return `<span class="assetto-score-stack"><strong>${formatDecimal(result.gridScore)}</strong><small>Rend. ${formatDecimal(result.performanceScore)}</small><button class="metric-help" type="button" data-tooltip="${escapeHtml(formula)}" aria-label="Desglose del GridScore">?</button></span>`;
+  const formula = uiText(
+    `GridScore ${formatDecimal(result.gridScore)} = Rendimiento ${formatDecimal(result.performanceScore)} × 75% + Limpieza ${formatDecimal(result.cleanlinessScore)} × 25%. El rendimiento es la media ponderada de: ${breakdown}. Los componentes ausentes se excluyen y los pesos restantes se reajustan.`,
+    `GridScore ${formatDecimal(result.gridScore)} = Performance ${formatDecimal(result.performanceScore)} × 75% + Cleanliness ${formatDecimal(result.cleanlinessScore)} × 25%. Performance is the weighted average of: ${breakdown}. Missing components are excluded and the remaining weights are adjusted.`
+  );
+  return `<span class="assetto-score-stack"><strong>${formatDecimal(result.gridScore)}</strong><small>${uiText("Rend.", "Perf.")} ${formatDecimal(result.performanceScore)}</small><button class="metric-help" type="button" data-tooltip="${escapeHtml(formula)}" aria-label="${uiText("Desglose del GridScore", "GridScore breakdown")}">?</button></span>`;
 }
 
 function cleanlinessMarkup(result) {
   if (result?.cleanlinessScore == null) return "—";
   const isAssetto = (appState.settings?.platform || appState.league?.platform) === "assetto-corsa";
   const normalizedIncidents = result.incidentsPer1000Corners != null
-    ? `${formatDecimal(result.incidentsPer1000Corners)}x / 1.000 curvas`
+    ? `${formatDecimal(result.incidentsPer1000Corners)}x / ${formatInteger(1000)} ${uiText("curvas", "corners")}`
     : result.incidentsPer30Minutes != null
       ? `${formatDecimal(result.incidentsPer30Minutes)}x / 30 min`
       : result.cutsPer30Minutes != null
         ? `${formatDecimal(result.cutsPer30Minutes)}x / 30 min`
         : result.incidents != null
-          ? `${formatDecimal(result.incidents)}x · sin distancia`
-          : "normalización no disponible";
+          ? `${formatDecimal(result.incidents)}x · ${uiText("sin distancia", "no distance")}`
+          : uiText("normalización no disponible", "normalization unavailable");
   let calculation;
   if (isAssetto && result.cutsPer30Minutes != null) {
     const minutes = result.drivingTimeMinutes != null ? formatDecimal(result.drivingTimeMinutes) : "—";
@@ -1001,7 +1019,10 @@ function cleanlinessMarkup(result) {
   } else {
     calculation = `Limpieza ${formatDecimal(result.cleanlinessScore)} calculada con ${formatDecimal(result.incidents)} incidentes. No hay distancia suficiente para normalizar el resultado.`;
   }
-  return `<span class="assetto-score-stack cleanliness"><strong>${formatDecimal(result.cleanlinessScore)}</strong><small>${normalizedIncidents}</small><button class="metric-help" type="button" data-tooltip="${escapeHtml(calculation)}" aria-label="Desglose de la limpieza">?</button></span>`;
+  if (window.GridScopeI18n?.getLanguage() === "en") {
+    calculation = `Cleanliness ${formatDecimal(result.cleanlinessScore)} is calculated from ${normalizedIncidents}. Incident rates are normalized by distance or driving time when those values are available.`;
+  }
+  return `<span class="assetto-score-stack cleanliness"><strong>${formatDecimal(result.cleanlinessScore)}</strong><small>${normalizedIncidents}</small><button class="metric-help" type="button" data-tooltip="${escapeHtml(calculation)}" aria-label="${uiText("Desglose de la limpieza", "Cleanliness breakdown")}">?</button></span>`;
 }
 
 const metricGlossaryEntries = [
@@ -1305,13 +1326,13 @@ function rankDrivers(mode = "weekly") {
 }
 
 function movementMarkup(value) {
-  if (value > 0) return `<span class="movement up" title="Sube ${value}">↑${value}</span>`;
-  if (value < 0) return `<span class="movement down" title="Baja ${Math.abs(value)}">↓${Math.abs(value)}</span>`;
+  if (value > 0) return `<span class="movement up" title="${uiText("Sube", "Up")} ${value}">↑${value}</span>`;
+  if (value < 0) return `<span class="movement down" title="${uiText("Baja", "Down")} ${Math.abs(value)}">↓${Math.abs(value)}</span>`;
   return '<span class="movement">—</span>';
 }
 
 function renderRanking(mode = appState.settings.rankingMode || "weekly") {
-  rankingLabel.textContent = mode === "weekly" ? "Media semanal" : "Media / carrera";
+  rankingLabel.textContent = mode === "weekly" ? uiText("Media semanal", "Weekly average") : uiText("Media / carrera", "Average / race");
   const minimum = requiredWeeks();
   let officialPosition = 0;
   const ranked = rankDrivers(mode).map((driver) => {
@@ -1334,7 +1355,7 @@ function renderRanking(mode = appState.settings.rankingMode || "weekly") {
           <div class="driver-cell">
             <i class="avatar ${driver.color}">${driver.initials}</i>
             <span><strong>${driver.name}</strong><small>ID ${driver.id}</small></span>
-            ${provisional ? '<em class="provisional">Provisional</em>' : ""}
+            ${provisional ? `<em class="provisional">${uiText("Provisional", "Provisional")}</em>` : ""}
           </div>
         </td>
         <td class="numeric metric-strong">${hasResults ? formatDecimal(metric) : "—"}</td>
@@ -1348,7 +1369,7 @@ function renderRanking(mode = appState.settings.rankingMode || "weekly") {
   }).join("");
 
   if (!appState.drivers.length) {
-    rankingBody.innerHTML = '<tr><td colspan="9">Todavía no hay pilotos en esta liga.</td></tr>';
+    rankingBody.innerHTML = `<tr><td colspan="9">${uiText("Todavía no hay pilotos en esta liga.", "There are no drivers in this league yet.")}</td></tr>`;
   }
 }
 
@@ -3059,15 +3080,15 @@ function miniLeagueMemberIdsForRace(eventId, scope = activeMiniLeagueScope) {
 }
 
 async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberIds = []) {
-  document.querySelector("#raceDetailTitle").textContent = "Cargando carrera…";
+  document.querySelector("#raceDetailTitle").textContent = uiText("Cargando carrera…", "Loading race…");
   document.querySelector("#raceDetailContent").innerHTML = dialogLoadingMarkup(
-    "Preparando el resultado…",
-    "Estamos calculando la clasificación, los duelos y las métricas de todos los pilotos."
+    uiText("Preparando el resultado…", "Preparing result…"),
+    uiText("Estamos calculando la clasificación, los duelos y las métricas de todos los pilotos.", "Calculating standings, head-to-head results and metrics for every driver.")
   );
   showDetailDialogOnTop(raceDetailDialog);
   const activity = beginActivity(
-    "Preparando el resultado de carrera…",
-    "Calculando posiciones, comparativas, GridScore y limpieza."
+    uiText("Preparando el resultado de carrera…", "Preparing race result…"),
+    uiText("Calculando posiciones, comparativas, GridScore y limpieza.", "Calculating positions, comparisons, GridScore and cleanliness.")
   );
   try {
     const detail = await apiRequest(`/api/races/${eventId}`);
@@ -3077,9 +3098,9 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
     const isRaceRoom = event.platform === "raceroom";
     const isMulticlass = event.platform === "iracing" && Number(event.classCount || 0) > 1;
     document.querySelector("#raceDetailKicker").textContent =
-      `Semana ${event.week} · ${formatRaceDate(event.startTime)}`;
+      `${uiText("Semana", "Week")} ${event.week} · ${formatRaceDate(event.startTime)}`;
     document.querySelector("#raceDetailTitle").textContent =
-      `${event.track} · ${event.layout || "Trazado principal"}`;
+      `${event.track} · ${event.layout || uiText("Trazado principal", "Main layout")}`;
     const weather = event.weather || {};
     const fastest = summary.fastestLapTime;
     const leagueMemberSet = new Set(leagueMemberIds.map(String));
@@ -3090,84 +3111,84 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
     );
     const raceMeta = isAssetto
       ? [
-          [event.aiDriversExcluded ? "Parrilla total" : "Parrilla", event.fieldSize],
-          ...(event.aiDriversExcluded ? [["Pilotos visibles", detail.results.length]] : []),
-          ["Vueltas", event.eventLapsComplete || "—"],
-          ["Vuelta rápida", formatLapTime(fastest)],
-          [metricHelp("Incidentes de parrilla", fieldContactExplanation("assetto-corsa", "esta carrera")), `${summary.totalIncidents}x`],
-          [event.aiDriversExcluded ? "IA excluida" : "Finalistas", event.aiDriversExcluded ? event.aiDriversExcluded : `${summary.finishers} / ${event.fieldSize}`],
-          ["Duración", event.sessionDurationMinutes ? `${event.sessionDurationMinutes} min` : "—"],
+          [event.aiDriversExcluded ? uiText("Parrilla total", "Full grid") : uiText("Parrilla", "Grid"), event.fieldSize],
+          ...(event.aiDriversExcluded ? [[uiText("Pilotos visibles", "Visible drivers"), detail.results.length]] : []),
+          [uiText("Vueltas", "Laps"), event.eventLapsComplete || "—"],
+          [uiText("Vuelta rápida", "Fastest lap"), formatLapTime(fastest)],
+          [metricHelp(uiText("Incidentes de parrilla", "Grid incidents"), fieldContactExplanation("assetto-corsa", "esta carrera")), `${summary.totalIncidents}x`],
+          [event.aiDriversExcluded ? uiText("IA excluida", "AI excluded") : uiText("Finalistas", "Finishers"), event.aiDriversExcluded ? event.aiDriversExcluded : `${summary.finishers} / ${event.fieldSize}`],
+          [uiText("Duración", "Duration"), event.sessionDurationMinutes ? `${event.sessionDurationMinutes} min` : "—"],
           ...(summary.ownerResult?.gridScore != null
             ? [
-                [metricHelp("Tu GridScore", gridScoreFormulaExplanation("assetto-corsa")), formatDecimal(summary.ownerResult.gridScore)],
-                [metricHelp("Tu limpieza", cleanlinessFormulaExplanation("assetto-corsa")), formatDecimal(summary.ownerResult.cleanlinessScore)]
+                [metricHelp(uiText("Tu GridScore", "Your GridScore"), gridScoreFormulaExplanation("assetto-corsa")), formatDecimal(summary.ownerResult.gridScore)],
+                [metricHelp(uiText("Tu limpieza", "Your cleanliness"), cleanlinessFormulaExplanation("assetto-corsa")), formatDecimal(summary.ownerResult.cleanlinessScore)]
               ]
             : []),
-          ["Sesión", escapeHtml(event.sessionName || "Race")],
-          ["Servidor", escapeHtml(event.serverName || "Local")],
+          [uiText("Sesión", "Session"), escapeHtml(event.sessionName || "Race")],
+          [uiText("Servidor", "Server"), escapeHtml(event.serverName || "Local")],
         ]
       : isRaceRoom
         ? [
-            ["Origen", "RaceRoom ranked"],
-            ["Parrilla", event.fieldSize],
-            ["Vueltas del ganador", event.eventLapsComplete || "—"],
-            ["Vuelta rápida", formatLapTime(fastest)],
-            [metricHelp("Incidentes de parrilla", "Suma de los Incident Points publicados por RaceRoom para todos los pilotos de esta carrera."), `${summary.totalIncidents}x`],
-            ["Tu distancia", summary.ownerResult?.distancePercent == null ? "—" : `${formatDecimal(summary.ownerResult.distancePercent)}%`],
-            ["Tu Rating", summary.ownerResult?.newIRating == null ? "—" : formatInteger(summary.ownerResult.newIRating)],
-            ["Tu Reputation", summary.ownerResult?.newSafetyRating == null ? "—" : formatDecimal(summary.ownerResult.newSafetyRating)]
+            [uiText("Origen", "Source"), "RaceRoom ranked"],
+            [uiText("Parrilla", "Grid"), event.fieldSize],
+            [uiText("Vueltas del ganador", "Winner laps"), event.eventLapsComplete || "—"],
+            [uiText("Vuelta rápida", "Fastest lap"), formatLapTime(fastest)],
+            [metricHelp(uiText("Incidentes de parrilla", "Grid incidents"), uiText("Suma de los Incident Points publicados por RaceRoom para todos los pilotos de esta carrera.", "Total Incident Points published by RaceRoom for all drivers in this race.")), `${summary.totalIncidents}x`],
+            [uiText("Tu distancia", "Your distance"), summary.ownerResult?.distancePercent == null ? "—" : `${formatDecimal(summary.ownerResult.distancePercent)}%`],
+            [uiText("Tu Rating", "Your Rating"), summary.ownerResult?.newIRating == null ? "—" : formatInteger(summary.ownerResult.newIRating)],
+            [uiText("Tu Reputation", "Your Reputation"), summary.ownerResult?.newSafetyRating == null ? "—" : formatDecimal(summary.ownerResult.newSafetyRating)]
           ]
         : [
           ["Split", `${event.splitNumber || "—"}${event.splitTotal ? ` / ${event.splitTotal}` : ""}`],
           ["SoF", formatInteger(event.strengthOfField)],
-          ["Parrilla", event.fieldSize],
-          ...(isMulticlass ? [["Clases", event.classCount]] : []),
-          ["Vueltas", event.eventLapsComplete || "—"],
-          ["Vuelta rápida", formatLapTime(fastest)],
-          [metricHelp("Inc. parrilla", fieldContactExplanation("iracing", "esta carrera")), `${summary.totalIncidents}x`],
-          ["Cambios de líder", event.leadChanges ?? "—"],
-          ["Temperatura", weather.temperature != null ? `${weather.temperature}°C` : "—"],
-          ["Telemetría", event.telemetryFiles?.length ? "Disponible" : "—"],
+          [uiText("Parrilla", "Grid"), event.fieldSize],
+          ...(isMulticlass ? [[uiText("Clases", "Classes"), event.classCount]] : []),
+          [uiText("Vueltas", "Laps"), event.eventLapsComplete || "—"],
+          [uiText("Vuelta rápida", "Fastest lap"), formatLapTime(fastest)],
+          [metricHelp(uiText("Inc. parrilla", "Grid inc."), fieldContactExplanation("iracing", "esta carrera")), `${summary.totalIncidents}x`],
+          [uiText("Cambios de líder", "Lead changes"), event.leadChanges ?? "—"],
+          [uiText("Temperatura", "Temperature"), weather.temperature != null ? `${weather.temperature}°C` : "—"],
+          [uiText("Telemetría", "Telemetry"), event.telemetryFiles?.length ? uiText("Disponible", "Available") : "—"],
           ...(summary.ownerResult?.gridScore != null
             ? [
-                [metricHelp("Tu GridScore", gridScoreFormulaExplanation(isRaceRoom ? "raceroom" : "iracing")), formatDecimal(summary.ownerResult.gridScore)],
-                [metricHelp("Tu limpieza", cleanlinessFormulaExplanation(isRaceRoom ? "raceroom" : "iracing")), formatDecimal(summary.ownerResult.cleanlinessScore)]
+                [metricHelp(uiText("Tu GridScore", "Your GridScore"), gridScoreFormulaExplanation(isRaceRoom ? "raceroom" : "iracing")), formatDecimal(summary.ownerResult.gridScore)],
+                [metricHelp(uiText("Tu limpieza", "Your cleanliness"), cleanlinessFormulaExplanation(isRaceRoom ? "raceroom" : "iracing")), formatDecimal(summary.ownerResult.cleanlinessScore)]
               ]
             : []),
           ];
     document.querySelector("#raceDetailContent").innerHTML = `
       <div class="track-detail-hero race-track-hero">
         <img src="${trackImageUrl(event.track, event.layout)}" alt="${escapeHtml(event.track)}">
-        <div><small>${isAssetto ? "Historial de Content Manager" : isRaceRoom ? "Historial ranked de RaceRoom" : "Resultado oficial"}</small><strong>${escapeHtml(event.track)}</strong><span>${escapeHtml(event.layout || "Trazado principal")} · ${escapeHtml(event.seriesName)}</span></div>
+        <div><small>${isAssetto ? uiText("Historial de Content Manager", "Content Manager history") : isRaceRoom ? uiText("Historial ranked de RaceRoom", "RaceRoom ranked history") : uiText("Resultado oficial", "Official result")}</small><strong>${escapeHtml(event.track)}</strong><span>${escapeHtml(event.layout || uiText("Trazado principal", "Main layout"))} · ${escapeHtml(event.seriesName)}</span></div>
       </div>
       <div class="race-detail-meta">
         ${raceMeta.map(([label, value]) => `<article><small>${label}</small><strong>${value}</strong></article>`).join("")}
       </div>
       <div class="race-extra-line">
         ${isAssetto
-          ? `<span>${escapeHtml(event.rawTrackId || event.track)}</span><span>Los incidentes proceden del contador guardado por Content Manager</span>`
+          ? `<span>${escapeHtml(event.rawTrackId || event.track)}</span><span>${uiText("Los incidentes proceden del contador guardado por Content Manager", "Incidents come from the counter saved by Content Manager")}</span>`
           : isRaceRoom
-            ? `<span>Race hash ${escapeHtml(event.externalEventId)}</span><span>Rating y Reputation proceden del resultado público de RaceRoom</span><span>Los pilotos bajo la distancia mínima aparecen, pero no puntúan</span>`
+            ? `<span>Race hash ${escapeHtml(event.externalEventId)}</span><span>${uiText("Rating y Reputation proceden del resultado público de RaceRoom", "Rating and Reputation come from RaceRoom's public result")}</span><span>${uiText("Los pilotos bajo la distancia mínima aparecen, pero no puntúan", "Drivers below the minimum distance are shown but do not score")}</span>`
             : `<span>Subsession ${escapeHtml(event.externalEventId)}</span>
-             <span>${event.cautions || 0} cautions · ${event.cautionLaps || 0} vueltas bajo caution</span>
-             ${isMulticlass ? "<span>La posición principal corresponde a la clase; la general aparece debajo</span>" : ""}
-             <span>${weather.humidity != null ? `Humedad ${weather.humidity}%` : "Clima no disponible"}</span>
-             ${event.telemetryFiles?.length ? `<span class="telemetry-race-note">${event.telemetryFiles.length} IBT · ${event.telemetryFiles[0].channelCount} canales · ${event.telemetryFiles[0].tickRate} Hz</span>` : ""}`}
+             <span>${event.cautions || 0} cautions · ${event.cautionLaps || 0} ${uiText("vueltas bajo caution", "laps under caution")}</span>
+             ${isMulticlass ? `<span>${uiText("La posición principal corresponde a la clase; la general aparece debajo", "The main position is the class position; the overall position is shown below")}</span>` : ""}
+             <span>${weather.humidity != null ? `${uiText("Humedad", "Humidity")} ${weather.humidity}%` : uiText("Clima no disponible", "Weather unavailable")}</span>
+             ${event.telemetryFiles?.length ? `<span class="telemetry-race-note">${event.telemetryFiles.length} IBT · ${event.telemetryFiles[0].channelCount} ${uiText("canales", "channels")} · ${event.telemetryFiles[0].tickRate} Hz</span>` : ""}`}
       </div>
       ${leaguePositionMap.size ? `
         <div class="race-highlight-legend">
-          <strong>${leaguePositionMap.size} miembros del campeonato en esta carrera</strong>
-          <span><i class="owner-dot"></i>Piloto de referencia</span>
-          ${highlightedDriverId != null ? '<span><i class="selected-dot"></i>Piloto consultado</span>' : ""}
-          <span><i class="member-dot"></i>Otros miembros</span>
+          <strong>${leaguePositionMap.size} ${uiText("miembros del campeonato en esta carrera", "championship members in this race")}</strong>
+          <span><i class="owner-dot"></i>${uiText("Piloto de referencia", "Reference driver")}</span>
+          ${highlightedDriverId != null ? `<span><i class="selected-dot"></i>${uiText("Piloto consultado", "Selected driver")}</span>` : ""}
+          <span><i class="member-dot"></i>${uiText("Otros miembros", "Other members")}</span>
         </div>` : ""}
       <div class="table-wrap race-results-wrap">
         <table class="race-results-table">
           <thead>
             <tr>
-              <th>${isMulticlass ? "Pos. clase" : "Pos."}</th><th>Piloto</th><th class="numeric">${isMulticlass ? "Salida clase" : "Salida"}</th><th class="numeric">± Pos.</th>
-              <th class="numeric">Inc.</th><th class="numeric">Vueltas</th>${isAssetto ? '<th class="numeric">Válidas</th>' : '<th class="numeric">Lideradas</th>'}
-              <th class="numeric">Mejor vuelta</th><th class="numeric">Media</th>${isAssetto ? `<th class="numeric">Consistencia</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation("assetto-corsa"))}</th><th>Neumáticos</th><th>Coche</th>` : `<th class="numeric">Intervalo</th><th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation(isRaceRoom ? "raceroom" : "iracing"))}</th><th class="numeric">${metricHelp("Limpieza", cleanlinessFormulaExplanation(isRaceRoom ? "raceroom" : "iracing"))}</th><th class="numeric">Puntos</th>`}<th>Estado</th>
+              <th>${isMulticlass ? uiText("Pos. clase", "Class pos.") : uiText("Pos.", "Pos.")}</th><th>${uiText("Piloto", "Driver")}</th><th class="numeric">${isMulticlass ? uiText("Salida clase", "Class start") : uiText("Salida", "Start")}</th><th class="numeric">± ${uiText("Pos.", "Pos.")}</th>
+              <th class="numeric">Inc.</th><th class="numeric">${uiText("Vueltas", "Laps")}</th>${isAssetto ? `<th class="numeric">${uiText("Válidas", "Valid")}</th>` : `<th class="numeric">${uiText("Lideradas", "Led")}</th>`}
+              <th class="numeric">${uiText("Mejor vuelta", "Best lap")}</th><th class="numeric">${uiText("Media", "Average")}</th>${isAssetto ? `<th class="numeric">${uiText("Consistencia", "Consistency")}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation("assetto-corsa"))}</th><th class="numeric">${metricHelp(uiText("Limpieza", "Cleanliness"), cleanlinessFormulaExplanation("assetto-corsa"))}</th><th>${uiText("Neumáticos", "Tyres")}</th><th>${uiText("Coche", "Car")}</th>` : `<th class="numeric">${uiText("Intervalo", "Interval")}</th><th class="numeric">${isRaceRoom ? "Rating" : "iRating"}</th><th class="numeric">${isRaceRoom ? "Reputation" : "SR"}</th><th class="numeric">${metricHelp("GridScore", gridScoreFormulaExplanation(isRaceRoom ? "raceroom" : "iracing"))}</th><th class="numeric">${metricHelp(uiText("Limpieza", "Cleanliness"), cleanlinessFormulaExplanation(isRaceRoom ? "raceroom" : "iracing"))}</th><th class="numeric">${uiText("Puntos", "Points")}</th>`}<th>${uiText("Estado", "Status")}</th>
             </tr>
           </thead>
           <tbody>
@@ -3178,9 +3199,9 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
               const isOtherMember = leaguePosition != null && !result.isOwner && !isSelected;
               return `
               <tr class="${result.isOwner ? "owner-result" : ""} ${isSelected ? "highlighted-rival" : ""} ${isOtherMember ? "league-member-result" : ""}">
-                <td><span class="position ${result.finishPosition <= 3 ? "medal" : ""}">${result.finishPosition}</span>${isMulticlass && result.overallFinishPosition ? `<small class="overall-position">General P${result.overallFinishPosition}</small>` : ""}</td>
-                <td><div class="driver-cell"><i class="avatar ${result.color}">${escapeHtml(result.initials)}</i><span><strong><button class="race-driver-profile-link" type="button" data-race-driver-profile="${result.iracingId}" aria-label="Abrir perfil de ${escapeHtml(result.name)}">${escapeHtml(result.name)}</button>${isSelected ? ' <em class="race-rival-badge">RIVAL SELECCIONADO</em>' : ""}${leaguePosition != null ? ` <em class="race-league-badge">CAMPEONATO P${leaguePosition}</em>` : ""}</strong><small>${escapeHtml(result.countryCode || result.division || driverIdentityText(result.iracingId))}${result.carNumber ? ` · #${escapeHtml(result.carNumber)}` : ""}${isMulticlass && result.className ? ` · ${escapeHtml(result.className)}` : ""}</small></span></div></td>
-                <td class="numeric">${result.startPosition ?? "—"}${isMulticlass && result.overallStartPosition ? `<small class="overall-position">General P${result.overallStartPosition}</small>` : ""}</td>
+                <td><span class="position ${result.finishPosition <= 3 ? "medal" : ""}">${result.finishPosition}</span>${isMulticlass && result.overallFinishPosition ? `<small class="overall-position">${uiText("General", "Overall")} P${result.overallFinishPosition}</small>` : ""}</td>
+                <td><div class="driver-cell"><i class="avatar ${result.color}">${escapeHtml(result.initials)}</i><span><strong><button class="race-driver-profile-link" type="button" data-race-driver-profile="${result.iracingId}" aria-label="${uiText("Abrir perfil de", "Open profile for")} ${escapeHtml(result.name)}">${escapeHtml(result.name)}</button>${isSelected ? ` <em class="race-rival-badge">${uiText("RIVAL SELECCIONADO", "SELECTED RIVAL")}</em>` : ""}${leaguePosition != null ? ` <em class="race-league-badge">${uiText("CAMPEONATO", "CHAMPIONSHIP")} P${leaguePosition}</em>` : ""}</strong><small>${escapeHtml(result.countryCode || result.division || driverIdentityText(result.iracingId))}${result.carNumber ? ` · #${escapeHtml(result.carNumber)}` : ""}${isMulticlass && result.className ? ` · ${escapeHtml(result.className)}` : ""}</small></span></div></td>
+                <td class="numeric">${result.startPosition ?? "—"}${isMulticlass && result.overallStartPosition ? `<small class="overall-position">${uiText("General", "Overall")} P${result.overallStartPosition}</small>` : ""}</td>
                 <td class="numeric">${result.positionChange != null ? positionChangeMarkup(result.positionChange) : "—"}</td>
                 <td class="numeric">${result.incidents}x</td>
                 <td class="numeric">${result.lapsComplete}</td>
@@ -3188,12 +3209,12 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
                 <td class="numeric ${result.bestLapTime === fastest ? "fastest-lap" : ""}">${formatLapTime(result.bestLapTime)}</td>
                 <td class="numeric">${formatLapTime(result.averageLapTime)}</td>
                 ${isAssetto
-                  ? `<td class="numeric" title="Desviación de sus tiempos de vuelta; cuanto menor, mayor regularidad">${result.lapTimeDeviation == null ? "—" : `±${result.lapTimeDeviation.toFixed(3)} s`}</td>
+                  ? `<td class="numeric" title="${uiText("Desviación de sus tiempos de vuelta; cuanto menor, mayor regularidad", "Lap-time deviation; lower values indicate greater consistency")}">${result.lapTimeDeviation == null ? "—" : `±${result.lapTimeDeviation.toFixed(3)} s`}</td>
                      <td class="numeric">${gridScoreMarkup(result)}</td>
                      <td class="numeric">${cleanlinessMarkup(result)}</td>
                      <td>${result.tyreCompounds?.length ? escapeHtml(result.tyreCompounds.join(", ")) : "—"}</td>
                      <td>${escapeHtml(result.carName || "—")}</td>`
-                  : `<td class="numeric">${result.intervalSeconds == null ? "—" : result.intervalSeconds === 0 ? "Líder" : `+${result.intervalSeconds.toFixed(3)}`}</td>
+                  : `<td class="numeric">${result.intervalSeconds == null ? "—" : result.intervalSeconds === 0 ? uiText("Líder", "Leader") : `+${result.intervalSeconds.toFixed(3)}`}</td>
                      <td class="numeric">${result.newIRating ? `${formatInteger(result.newIRating)} <small>${formatSigned(result.iratingChange)}</small>` : formatSigned(result.iratingChange)}</td>
                      <td class="numeric">${result.newSafetyRating ? `${formatDecimal(result.newSafetyRating)} <small>${formatSigned(result.safetyRatingChange)}</small>` : formatSigned(result.safetyRatingChange)}</td>
                      <td class="numeric">${gridScoreMarkup(result)}</td>
@@ -3206,7 +3227,7 @@ async function openRaceDetail(eventId, highlightedDriverId = null, leagueMemberI
         </table>
       </div>`;
   } catch (error) {
-    document.querySelector("#raceDetailTitle").textContent = "No se pudo abrir la carrera";
+    document.querySelector("#raceDetailTitle").textContent = uiText("No se pudo abrir la carrera", "The race could not be opened");
     document.querySelector("#raceDetailContent").innerHTML = `<p class="dialog-help">${escapeHtml(error.message)}</p>`;
   } finally {
     endActivity(activity);
@@ -3416,18 +3437,18 @@ function renderLeagueContext() {
     : 0;
 
   document.querySelector("#leaderLabel").textContent =
-    appState.league.isCurrent ? "Líder actual" : "Líder de la temporada";
-  document.querySelector("#leaderName").textContent = leader?.name || "Sin clasificación";
-  document.querySelector("#leaderDetail").textContent = leader ? `${formatDecimal(leader.weekly)} pos. media` : "Sin carreras";
-  document.querySelector("#leaderTrend").textContent = leader ? `${leader.weeks} sem.` : "—";
-  document.querySelector("#cleanName").textContent = cleanest?.name || "Sin datos";
-  document.querySelector("#cleanDetail").textContent = cleanest ? `${formatDecimal(cleanest.incidents)}x por semana` : "Sin carreras";
-  document.querySelector("#cleanTrend").textContent = cleanest ? `${cleanest.racesCount} carreras` : "—";
-  document.querySelector("#winnerName").textContent = winner?.name || "Sin datos";
+    appState.league.isCurrent ? uiText("Líder actual", "Current leader") : uiText("Líder de la temporada", "Season leader");
+  document.querySelector("#leaderName").textContent = leader?.name || uiText("Sin clasificación", "No standings");
+  document.querySelector("#leaderDetail").textContent = leader ? uiText(`${formatDecimal(leader.weekly)} pos. media`, `${formatDecimal(leader.weekly)} avg. position`) : uiText("Sin carreras", "No races");
+  document.querySelector("#leaderTrend").textContent = leader ? uiText(`${leader.weeks} sem.`, `${leader.weeks} wk.`) : "—";
+  document.querySelector("#cleanName").textContent = cleanest?.name || uiText("Sin datos", "No data");
+  document.querySelector("#cleanDetail").textContent = cleanest ? uiText(`${formatDecimal(cleanest.incidents)}x por semana`, `${formatDecimal(cleanest.incidents)}x per week`) : uiText("Sin carreras", "No races");
+  document.querySelector("#cleanTrend").textContent = cleanest ? uiText(`${cleanest.racesCount} carreras`, `${cleanest.racesCount} races`) : "—";
+  document.querySelector("#winnerName").textContent = winner?.name || uiText("Sin datos", "No data");
   document.querySelector("#winnerDetail").textContent = winner
-    ? `${winner.wins} victoria${winner.wins === 1 ? "" : "s"}`
-    : "Sin carreras";
-  document.querySelector("#winnerTrend").textContent = winner ? `${winner.racesCount} carreras` : "—";
+    ? uiText(`${winner.wins} victoria${winner.wins === 1 ? "" : "s"}`, `${winner.wins} win${winner.wins === 1 ? "" : "s"}`)
+    : uiText("Sin carreras", "No races");
+  document.querySelector("#winnerTrend").textContent = winner ? uiText(`${winner.racesCount} carreras`, `${winner.racesCount} races`) : "—";
   document.querySelector("#sofValue").textContent = isAssetto
     ? formatInteger(appState.drivers.length)
     : averageSof ? formatInteger(averageSof) : "—";
@@ -3924,7 +3945,10 @@ function renderSettings() {
   const minimum = requiredWeeks();
   document.querySelector("#qualificationNote").innerHTML = `
     <svg viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-6v-4m0-4h.01" /></svg>
-    Se requieren ${minimum} de ${appState.league.weeksCompleted} semanas con carreras para entrar en la clasificación${isAssetto ? "" : " oficial"}.
+    ${uiText(
+      `Se requieren ${minimum} de ${appState.league.weeksCompleted} semanas con carreras para entrar en la clasificación${isAssetto ? "" : " oficial"}.`,
+      `${minimum} of ${appState.league.weeksCompleted} race weeks are required to enter the ${isAssetto ? "standings" : "official standings"}.`
+    )}
   `;
 
   rankingButtons.forEach((button) => {
